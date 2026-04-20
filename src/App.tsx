@@ -736,7 +736,7 @@ function PageHome() {
       <div className="bg-gradient-to-br from-[#DA291C] to-[#99140d] text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#FFC72C] rounded-full mix-blend-multiply filter blur-[128px] opacity-60 animate-pulse"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 relative z-10 flex flex-col md:flex-row items-center gap-12 md:gap-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-24 md:py-24 relative z-10 flex flex-col md:flex-row items-center justify-between gap-12 md:gap-16">
            <div className="flex-1 text-center md:text-left z-20">
              <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#FFC72C] text-[#DA291C] font-black uppercase tracking-widest px-4 py-1.5 rounded-full text-sm inline-block mb-6 shadow-xl border-2 border-[#FFC72C]/50">Édition Limitée</motion.span>
              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-black text-6xl md:text-8xl lg:text-[9rem] leading-[0.85] tracking-tighter mb-6 uppercase text-white drop-shadow-2xl">Méga<br/><span className="text-[#FFC72C] filter drop-shadow-md">Gastro.</span></motion.h1>
@@ -782,31 +782,31 @@ function PageHome() {
       </div>
 
       {/* QUICK CATEGORIES */}
-      <section className="py-12 bg-white">
+      <section className="py-10 sm:py-12 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-           <h2 className="font-black text-3xl uppercase tracking-tight text-center mb-10 text-gray-900">Tu as envie de quoi ?</h2>
-           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+           <h2 className="font-black text-2xl sm:text-3xl uppercase tracking-tight text-center mb-6 sm:mb-10 text-gray-900">Tu as envie de quoi ?</h2>
+           <div className="flex overflow-x-auto sm:grid sm:grid-cols-6 gap-3 sm:gap-4 pb-4 sm:pb-0 hide-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
               {CATEGORIES.map(cat => (
-                <Link to="/menu" key={cat.id} className={`${cat.color} rounded-2xl p-4 flex flex-col items-center justify-center gap-3 hover:-translate-y-2 transition-transform shadow-sm border border-black/5`}>
-                   <span className="text-5xl drop-shadow-md">{cat.icon}</span>
-                   <span className={`font-black text-sm uppercase text-center ${cat.text}`}>{cat.name}</span>
+                <Link to="/menu" key={cat.id} className={`${cat.color} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 hover:-translate-y-1 sm:hover:-translate-y-2 transition-transform shadow-sm border border-black/5 min-w-[110px] shrink-0 snap-center`}>
+                   <span className="text-4xl sm:text-5xl drop-shadow-md">{cat.icon}</span>
+                   <span className={`font-black text-[11px] sm:text-sm uppercase text-center ${cat.text} leading-tight`}>{cat.name}</span>
                 </Link>
               ))}
            </div>
         </div>
       </section>
       {/* SWIPE MENU (THE HITS) */}
-      <section className="py-16 bg-gray-50 border-t border-gray-200 overflow-hidden">
+      <section className="py-10 sm:py-16 bg-gray-50 border-t border-gray-200 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="font-black text-4xl uppercase tracking-tight text-gray-900 flex items-center gap-3">
-              <Star className="w-8 h-8 text-[#FFC72C] fill-[#FFC72C]" /> Nos Incontournables
+          <div className="flex justify-between items-center mb-6 sm:mb-8">
+            <h2 className="font-black text-2xl sm:text-4xl uppercase tracking-tight text-gray-900 flex items-center gap-2 sm:gap-3">
+              <Star className="w-6 h-6 sm:w-8 sm:h-8 text-[#FFC72C] fill-[#FFC72C]" /> Nos Incontournables
             </h2>
             <Link to="/menu" className="hidden sm:inline-flex items-center gap-1 font-bold text-[#DA291C] hover:text-red-800">Voir tout le menu <ChevronRight className="w-5 h-5"/></Link>
           </div>
-          <div className="flex overflow-x-auto gap-6 pb-6 hide-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth">
+          <div className="flex overflow-x-auto gap-4 sm:gap-6 pb-6 hide-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth snap-x snap-mandatory">
              {PRODUCTS.filter(p => p.popular).map(product => (
-                <div key={product.id} className="min-w-[280px] sm:min-w-[320px] shrink-0">
+                <div key={product.id} className="w-[75vw] max-w-[260px] sm:max-w-none sm:w-[320px] shrink-0 snap-center">
                   <ProductCard product={product} />
                 </div>
              ))}
@@ -904,7 +904,7 @@ function PageMenu() {
              <p className="font-bold text-gray-500">Nous n'avons pas trouvé ce que vous cherchez.</p>
            </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
             <AnimatePresence mode="popLayout">
               {filteredProducts.map((product) => (
                 <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }} key={product.id}>
@@ -1232,25 +1232,25 @@ const ProductCard: React.FC<{ product: ProductInfo }> = ({ product }) => {
     <motion.div 
       whileHover={{ y: -5, scale: 1.02 }}
       onClick={() => setSelectedProduct(product)} 
-      className={`bg-white rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 hover:shadow-2xl hover:border-gray-200 hover:ring-4 hover:ring-gray-50 transition-all duration-300 flex flex-col group cursor-pointer h-full relative`}
+      className={`bg-white rounded-2xl sm:rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 hover:shadow-2xl hover:border-gray-200 hover:ring-4 hover:ring-gray-50 transition-all duration-300 flex flex-col group cursor-pointer h-full relative`}
     >
-      {product.badge && <div className={`absolute top-4 left-4 z-10 text-white text-[10px] sm:text-xs font-black px-3 py-1.5 rounded-xl uppercase tracking-wider shadow-lg transform -rotate-2 ${product.badge.includes('Deal') ? 'bg-[#FFC72C] text-[#DA291C]' : 'bg-[#DA291C]'}`}>{product.badge}</div>}
-      <div className="w-full relative aspect-[5/4] bg-gradient-to-b from-gray-50 to-gray-100 overflow-hidden p-6 flex items-center justify-center">
+      {product.badge && <div className={`absolute top-3 left-3 sm:top-4 sm:left-4 z-10 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl uppercase tracking-wider shadow-lg transform -rotate-2 ${product.badge.includes('Deal') ? 'bg-[#FFC72C] text-[#DA291C]' : 'bg-[#DA291C]'}`}>{product.badge}</div>}
+      <div className="w-full relative aspect-[4/3] sm:aspect-[5/4] bg-gradient-to-b from-gray-50 to-gray-100 overflow-hidden p-4 sm:p-6 flex items-center justify-center">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/60 via-transparent to-transparent opacity-80" />
-        <img src={product.image} alt={product.name} className="w-full h-full object-contain filter drop-shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:-rotate-3" loading="lazy" />
+        <img src={product.image} alt={product.name} className="w-full h-full object-contain filter drop-shadow-md sm:drop-shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:-rotate-3" loading="lazy" />
       </div>
-      <div className="p-6 flex-1 flex flex-col justify-between bg-white relative z-10 rounded-t-3xl -mt-4">
+      <div className="p-4 sm:p-6 flex-1 flex flex-col justify-between bg-white relative z-10 rounded-t-2xl sm:rounded-t-3xl -mt-4">
         <div>
-          <h4 className="font-black text-xl text-gray-900 leading-tight mb-2 uppercase tracking-tight group-hover:text-[#DA291C] transition-colors">{product.name}</h4>
-          <p className="text-gray-500 font-bold text-xs line-clamp-2 leading-relaxed mb-4">{product.description}</p>
+          <h4 className="font-black text-lg sm:text-xl text-gray-900 leading-tight mb-1 sm:mb-2 uppercase tracking-tight group-hover:text-[#DA291C] transition-colors">{product.name}</h4>
+          <p className="text-gray-500 font-medium text-[11px] sm:text-xs line-clamp-2 leading-relaxed mb-3 sm:mb-4">{product.description}</p>
         </div>
-        <div className="flex justify-between items-end mt-auto pt-4 border-t border-gray-100">
+        <div className="flex justify-between items-end mt-auto pt-3 sm:pt-4 border-t border-gray-100">
           <div className="flex flex-col">
-            {product.oldPrice && <span className="text-xs font-black text-gray-400 line-through mb-0.5">{formatPriceC(product.oldPrice)}</span>}
-            <span className="font-black text-[22px] tracking-tight text-[#DA291C]">{formatPriceC(product.price)}</span>
+            {product.oldPrice && <span className="text-[10px] sm:text-xs font-black text-gray-400 line-through mb-0.5">{formatPriceC(product.oldPrice)}</span>}
+            <span className="font-black text-lg sm:text-[22px] tracking-tight text-[#DA291C]">{formatPriceC(product.price)}</span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); }} className="bg-[#FFC72C] hover:bg-yellow-400 text-[#DA291C] w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-[0_4px_15px_rgba(255,199,44,0.4)] hover:scale-110 active:scale-95 border-b-[4px] border-yellow-600 active:border-b-0 active:translate-y-[4px]">
-            <ShoppingBag className="w-5 h-5 stroke-[2.5]" />
+          <button onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); }} className="bg-[#FFC72C] hover:bg-yellow-400 text-[#DA291C] w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-[0_4px_10px_rgba(255,199,44,0.3)] sm:shadow-[0_4px_15px_rgba(255,199,44,0.4)] hover:scale-110 active:scale-95 border-b-[3px] sm:border-b-[4px] border-yellow-600 active:border-b-0 active:translate-y-[3px] sm:active:translate-y-[4px]">
+            <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
           </button>
         </div>
       </div>
@@ -1553,9 +1553,9 @@ function PageTracking() {
         </div>
 
         {/* Right Column: Map Content */}
-        <div className="flex-1 flex flex-col min-h-[400px]">
+        <div className="flex-1 flex flex-col min-h-[350px] sm:min-h-[400px]">
           {activeOrder.orderMode === 'livraison' ? (
-            <div className="bg-white rounded-[2rem] p-2 border border-gray-200 shadow-xl overflow-hidden flex-1 relative min-h-[500px]">
+            <div className="bg-white rounded-[2rem] p-2 border border-gray-200 shadow-xl overflow-hidden flex-1 relative min-h-[400px] sm:min-h-[500px]">
               <MapContainer center={storePos} zoom={14} style={{ height: '100%', width: '100%', borderRadius: '1.75rem' }} zoomControl={false}>
                 <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
                 <Marker position={storePos} icon={storeIcon}><Popup>Restaurant La Gastronomie</Popup></Marker>
