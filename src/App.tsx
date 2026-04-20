@@ -1,14 +1,63 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
   Menu as MenuIcon, X, ArrowRight, UtensilsCrossed, Timer, 
-  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut
+  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw
 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// --- ROBUST API SIMULATION UTILITY ---
+const simulateApiCall = <T,>(data: T, failureRate: number = 0.3, delay: number = 800): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      if (Math.random() < failureRate) {
+        reject(new Error("La requête réseau a échoué. Problème de connexion avec le serveur."));
+      } else {
+        resolve(data);
+      }
+    }, delay);
+  });
+};
+
+// --- GLOBAL ERROR COMPONENT ---
+function ApiErrorState({ message, onRetry }: { message: string, onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center max-w-md mx-auto">
+      <div className="w-20 h-20 bg-red-50 text-[#DA291C] rounded-[2rem] flex items-center justify-center mb-6 shadow-sm border border-red-100 transform -rotate-3">
+        <AlertTriangle className="w-10 h-10" />
+      </div>
+      <h3 className="font-black text-2xl text-gray-900 mb-2 uppercase tracking-tight">Oups ! Erreur Serveur</h3>
+      <p className="font-bold text-gray-500 mb-8">{message}</p>
+      <button 
+        onClick={onRetry} 
+        className="bg-[#DA291C] text-white px-8 py-4 rounded-xl font-black uppercase tracking-wider shadow-[0_4px_15px_rgba(218,41,28,0.4)] hover:bg-red-700 hover:scale-105 transition-all border-b-[4px] border-red-900 active:border-b-0 active:scale-95 active:translate-y-[4px] flex gap-3 items-center mx-auto"
+      >
+        <RefreshCcw className="w-5 h-5" /> Tenter de nouveau
+      </button>
+    </div>
+  );
+}
+
+const storeIcon = new L.DivIcon({
+  html: `<div style="background-color: #DA291C; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3);"><span style="color: #FFC72C; font-weight: 900; font-family: sans-serif; font-size: 16px;">G.</span></div>`,
+  className: '', iconSize: [32, 32], iconAnchor: [16, 32],
+});
+const bikeIcon = new L.DivIcon({
+  html: `<div style="background-color: #FFC72C; width: 44px; height: 44px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-size: 22px;">🛵</div>`,
+  className: '', iconSize: [44, 44], iconAnchor: [22, 22],
+});
+const homeIcon = new L.DivIcon({
+  html: `<div style="background-color: #25D366; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 16px;">📍</div>`,
+  className: '', iconSize: [32, 32], iconAnchor: [16, 32],
+});
 
 // --- DATA: FRANCHISE DRIVEN ---
 const CATEGORIES = [
+  { id: 'all', name: 'Tous', icon: '🍽️', color: 'bg-gray-100', text: 'text-gray-600' },
   { id: '1', name: 'Nos Menus XL', icon: '🍟', color: 'bg-[#FFC72C]', text: 'text-[#DA291C]' },
   { id: '2', name: 'Les Burgers', icon: '🍔', color: 'bg-orange-100', text: 'text-orange-600' },
   { id: '3', name: 'Pizzas XXL', icon: '🍕', color: 'bg-red-100', text: 'text-red-600' },
@@ -25,8 +74,11 @@ const PRODUCTS = [
   { id: 'p1', name: 'Menu Big Gastro', description: 'Notre burger signature double étage, portion de frites dorées moyenne, boisson 40cl au choix.', price: 18000, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=100', categoryId: '1', badge: 'N°1 Des Ventes', popular: true },
   { id: 'p5', name: 'Menu Pizza Suprême', description: 'Pizza moyenne au choix, 2 ailerons croustillants, boisson 40cl.', price: 22000, image: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=100', categoryId: '1', popular: true },
   { id: 'p2', name: 'Burger Chicken Crispy', description: 'Poulet pané aux 11 épices, mayonnaise légère, salade croquante.', price: 12000, oldPrice: 15000, image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&q=100', categoryId: '2', badge: 'Deal', popular: true },
+  { id: 'p6', name: 'Burger Rustique', description: 'Steak façon boucher, tomme fondue, oignons caramélisés et sauce poivre.', price: 16000, image: 'https://images.unsplash.com/photo-1586816001966-79b736744398?w=800&q=100', categoryId: '2', popular: true },
   { id: 'p3', name: 'Pizza Reine XXL (40cm)', description: 'Jambon de dinde, champignons de Paris, double mozzarella, pâte fraîche du jour.', price: 32000, image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=100', categoryId: '3', popular: false },
-  { id: 'p4', name: 'Magic Kids Box', description: 'Cheeseburger enfant, mini frites, jus de fruit 20cl, 1 jouet exclusif.', price: 10000, image: 'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?w=800&q=100', categoryId: '4', popular: true }
+  { id: 'p7', name: 'Pizza Spicy Chicken', description: 'Poulet épicé, poivrons rouges, piment jalapeño, mozzarella.', price: 29000, image: 'https://images.unsplash.com/photo-1590947132387-15500021b369?w=800&q=100', categoryId: '3', popular: false },
+  { id: 'p4', name: 'Magic Kids Box', description: 'Cheeseburger enfant, mini frites, jus de fruit 20cl, 1 jouet exclusif.', price: 10000, image: 'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?w=800&q=100', categoryId: '4', popular: true },
+  { id: 'p8', name: 'Soda Limonade G.', description: 'Notre limonade artisanale hyper rafraîchissante, citron vert et menthe.', price: 4000, image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=100', categoryId: '5', popular: true }
 ];
 
 const RESTAURANTS = [
@@ -65,6 +117,9 @@ interface CartContextType {
   whatsappNumber: string;
   isLoggedIn: boolean;
   setIsLoggedIn: (b: boolean) => void;
+  activeOrder: any;
+  setActiveOrder: (order: any) => void;
+  clearCart: () => void;
 }
 const CartContext = createContext<CartContextType | null>(null);
 const useCart = () => { const ctx = useContext(CartContext); if (!ctx) throw new Error("Missing CartProvider"); return ctx; };
@@ -77,6 +132,7 @@ export default function App() {
   const [lastAdded, setLastAdded] = useState<string | null>(null);
   const [country, setCountry] = useState<keyof typeof COUNTRIES>('MG');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<any>(null);
 
   const addToCart = (product: ProductInfo, quantity: number, instructions: string = '') => {
     setCart(prev => {
@@ -103,6 +159,10 @@ export default function App() {
     setCart(prev => prev.filter(item => item.product.id !== productId));
   };
 
+  const clearCart = () => {
+    setCart([]);
+  };
+
   const getCartTotal = () => cart.reduce((total, item) => total + (item.product.price * item.quantity), 0);
   const getCartCount = () => cart.reduce((count, item) => count + item.quantity, 0);
 
@@ -118,7 +178,7 @@ export default function App() {
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=Bonjour,%20je%20souhaite%20commander.`;
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn }}>
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder }}>
       <Router>
         <Layout>
           <AnimatePresence mode="popLayout" onExitComplete={() => window.scrollTo(0, 0)}>
@@ -127,6 +187,8 @@ export default function App() {
               <Route path="/menu" element={<PageMenu />} />
               <Route path="/app-fidelite" element={<PageLoyalty />} />
               <Route path="/restaurants" element={<PageRestaurants />} />
+              <Route path="/tracking" element={<PageTracking />} />
+              <Route path="/recrutement" element={<PageRecrutement />} />
             </Routes>
           </AnimatePresence>
         </Layout>
@@ -137,7 +199,7 @@ export default function App() {
 
 // --- LAYOUT : FRANCHISE HEADER ---
 function Layout({ children }: { children: React.ReactNode }) {
-  const { getCartCount, getCartTotal, selectedProduct, setSelectedProduct, setIsCartOpen, isCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber } = useCart();
+  const { getCartCount, getCartTotal, selectedProduct, setSelectedProduct, setIsCartOpen, isCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, cart, activeOrder } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
@@ -151,6 +213,18 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col min-h-screen pb-24 sm:pb-0 overflow-x-hidden">
+      {/* ACTIVE ORDER TOP BANNER */}
+      {activeOrder && location.pathname !== '/tracking' && (
+        <div className="bg-[#DA291C] text-white px-4 py-2 flex items-center justify-center gap-4 z-[100] relative cursor-pointer" onClick={() => window.location.href='/tracking'}>
+           <div className="relative flex items-center justify-center">
+             <div className="absolute inset-0 bg-white rounded-full animate-ping opacity-30"></div>
+             <Bike className="w-5 h-5 relative z-10" />
+           </div>
+           <span className="font-extrabold text-sm uppercase tracking-widest text-red-50">Commande {activeOrder.id} en cours — Suivez votre livreur !</span>
+           <ChevronRight className="w-4 h-4 text-white opacity-50" />
+        </div>
+      )}
+
       {/* TOP BAR / UTILITY BAR */}
       <div className="hidden md:flex bg-gray-100 text-gray-500 text-xs font-bold py-1.5 px-4 justify-between items-center z-50 relative">
         <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
@@ -165,7 +239,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex gap-4 items-center">
              <a href={whatsappLink} target="_blank" rel="noreferrer" className="hover:text-[#25D366] flex items-center gap-1 font-extrabold text-[#25D366]"><MessageCircle className="w-3 h-3"/> WhatsApp</a>
-             <Link to="/app-fidelite" className="hover:text-[#DA291C] border-l border-gray-300 pl-4">Créer un compte</Link>
+             <Link to="/tracking" className="hover:text-[#DA291C] border-l border-gray-300 pl-4">Suivre ma commande</Link>
              <Link to="/restaurants" className="hover:text-[#DA291C]">Trouver votre restaurant</Link>
           </div>
         </div>
@@ -192,7 +266,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="hidden lg:flex items-center space-x-1 font-bold text-[15px]">
             <Link to="/menu" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/menu' ? 'bg-[#FFC72C] text-[#DA291C]' : 'text-gray-700 hover:bg-gray-100'}`}>Nos Menus</Link>
-            <Link to="/app-fidelite" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/app-fidelite' ? 'bg-[#DA291C] text-white' : 'text-gray-700 hover:bg-gray-100 flex items-center gap-2'}`}>L'App <Smartphone className="w-4 h-4 text-[#DA291C]"/></Link>
+            <Link to="/tracking" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/tracking' ? 'bg-[#DA291C] text-white' : 'text-gray-700 hover:bg-gray-100 flex items-center gap-2'}`}>Suivi de Commande <Navigation className="w-4 h-4 text-[#DA291C]"/></Link>
             <Link to="/restaurants" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/restaurants' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>Restaurants & Drive</Link>
           </div>
 
@@ -264,7 +338,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <div className="flex flex-col font-extrabold text-2xl text-gray-900">
                 <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="p-6 border-b border-gray-100 flex justify-between items-center">Accueil <ChevronRight className="w-6 h-6 text-gray-300"/></Link>
                 <Link to="/menu" onClick={() => setIsMobileMenuOpen(false)} className="p-6 border-b border-gray-100 flex justify-between items-center text-[#DA291C]">Voir la Carte <ChevronRight className="w-6 h-6 text-[#DA291C]"/></Link>
-                <Link to="/app-fidelite" onClick={() => setIsMobileMenuOpen(false)} className="p-6 border-b border-gray-100 flex justify-between items-center">App & Fidélité <ChevronRight className="w-6 h-6 text-gray-300"/></Link>
+                <Link to="/tracking" onClick={() => setIsMobileMenuOpen(false)} className="p-6 border-b border-gray-100 flex justify-between items-center">Suivi de Commande <ChevronRight className="w-6 h-6 text-gray-300"/></Link>
                 <Link to="/restaurants" onClick={() => setIsMobileMenuOpen(false)} className="p-6 border-b border-gray-100 flex justify-between items-center">Drive & Restos <ChevronRight className="w-6 h-6 text-gray-300"/></Link>
               </div>
             </div>
@@ -305,15 +379,21 @@ function Layout({ children }: { children: React.ReactNode }) {
                <h4 className="font-black text-xl mb-6 text-white">L'Entreprise</h4>
                <ul className="space-y-4 font-bold text-gray-400">
                  <li><Link to="/restaurants" className="hover:text-white transition-colors">Localiser un Drive</Link></li>
-                 <li><a href="#" className="hover:text-white transition-colors">Recrutement</a></li>
+                 <li><Link to="/recrutement" className="hover:text-white transition-colors">Recrutement</Link></li>
                </ul>
             </div>
 
             <div>
-               <h4 className="font-black text-xl mb-6 text-white">Téléchargez l'App</h4>
+               <h4 className="font-black text-xl mb-6 text-white">Vos Commandes</h4>
                <div className="flex flex-col gap-3">
-                 <Link to="/app-fidelite" className="bg-white text-gray-900 px-4 py-3 rounded-xl font-black text-center flex items-center justify-center gap-2 hover:bg-gray-200">
-                   <Smartphone className="w-5 h-5"/> Découvrir l'App
+                 <Link to="/tracking" className="bg-white text-gray-900 px-4 py-3 rounded-xl font-black text-left flex items-center gap-3 hover:bg-gray-200 transition-all hover:scale-105 active:scale-95 shadow-lg border-b-[4px] border-gray-300">
+                   <div className="bg-[#DA291C] text-white p-2 rounded-lg">
+                      <Navigation className="w-6 h-6"/>
+                   </div>
+                   <div className="flex flex-col leading-tight">
+                     <span className="text-[10px] font-bold text-gray-500 uppercase">En temps réel</span>
+                     <span className="text-lg">Suivre la livraison</span>
+                   </div>
                  </Link>
                </div>
             </div>
@@ -356,25 +436,37 @@ function Layout({ children }: { children: React.ReactNode }) {
         )}
       </AnimatePresence>
 
-      {/* MOBILE STICKY BOTTOM CTA BAR */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-white/95 backdrop-blur-md border-t border-gray-200 px-3 pt-3 pb-3 flex gap-2 shadow-[0_-10px_30px_rgba(0,0,0,0.1)]" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-         <a href={`tel:${currentCountry.phone.replace(/\s/g, '')}`} className="flex-[0.8] bg-white border border-gray-200 text-gray-800 rounded-xl flex flex-col items-center justify-center py-2 shadow-sm active:bg-gray-50 active:scale-95 transition-all">
-            <Phone className="w-5 h-5 mb-1"/>
-            <span className="text-[9px] font-black uppercase tracking-wider">Appeler</span>
-         </a>
-         <a href={whatsappLink} target="_blank" rel="noreferrer" className="flex-[0.8] bg-[#25D366] text-white rounded-xl flex flex-col items-center justify-center py-2 shadow-sm border-b-[3px] border-[#1DA851] active:border-b-0 active:translate-y-[3px] transition-all">
-            <MessageCircle className="w-5 h-5 mb-1"/>
-            <span className="text-[9px] font-black uppercase tracking-wider">WhatsApp</span>
-         </a>
-         <button onClick={() => { getCartCount() > 0 ? setIsCartOpen(true) : window.location.href='/menu'; }} className="flex-[1.4] bg-[#DA291C] text-white rounded-xl flex flex-col items-center justify-center py-2 shadow-[0_4px_15px_rgba(218,41,28,0.4)] border-b-[3px] border-red-900 active:border-b-0 active:translate-y-[3px] transition-all relative">
-            {getCartCount() > 0 && (
-              <span className="absolute -top-2 -right-2 bg-[#FFC72C] text-[#DA291C] text-xs px-1.5 py-0.5 rounded-full font-black border-2 border-white shadow-sm leading-none">
+      {/* APP-LIKE BOTTOM NAVIGATION BAR (Mobile) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-white border-t border-gray-100 flex justify-around items-center pt-2 pb-safe" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+        <Link to="/" className={`flex flex-col items-center p-2 rounded-xl transition-colors ${location.pathname === '/' ? 'text-[#DA291C]' : 'text-gray-400'}`}>
+          <Home className="w-6 h-6 mb-1" />
+          <span className="text-[10px] font-bold">Accueil</span>
+        </Link>
+        <Link to="/menu" className={`flex flex-col items-center p-2 rounded-xl transition-colors ${location.pathname === '/menu' ? 'text-[#DA291C]' : 'text-gray-400'}`}>
+          <UtensilsCrossed className="w-6 h-6 mb-1" />
+          <span className="text-[10px] font-bold">Menu</span>
+        </Link>
+        
+        {/* Floating Cart Button */}
+        <div className="relative -top-6">
+          <button onClick={() => { getCartCount() > 0 ? setIsCartOpen(true) : window.location.href='/menu'; }} className="bg-[#DA291C] text-white rounded-full p-4 shadow-[0_8px_20px_rgba(218,41,28,0.4)] flex items-center justify-center relative active:scale-95 transition-transform">
+             {getCartCount() > 0 && (
+              <span className="absolute top-0 right-0 translate-x-[20%] -translate-y-[20%] bg-[#FFC72C] text-[#DA291C] text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-white shadow-sm">
                 {getCartCount()}
               </span>
             )}
-            <ShoppingBag className="w-5 h-5 mb-1"/>
-            <span className="text-[10px] font-black uppercase tracking-wider">{getCartCount() > 0 ? formatPriceC(getCartTotal()) : 'Commander'}</span>
-         </button>
+             <ShoppingBag className="w-6 h-6" />
+          </button>
+        </div>
+
+        <Link to="/tracking" className={`flex flex-col items-center p-2 rounded-xl transition-colors ${location.pathname === '/tracking' ? 'text-[#DA291C]' : 'text-gray-400'}`}>
+          <Navigation className="w-6 h-6 mb-1" />
+          <span className="text-[10px] font-bold">Suivi</span>
+        </Link>
+        <Link to="/restaurants" className={`flex flex-col items-center p-2 rounded-xl transition-colors ${location.pathname === '/restaurants' ? 'text-[#DA291C]' : 'text-gray-400'}`}>
+          <MapPin className="w-6 h-6 mb-1" />
+          <span className="text-[10px] font-bold">Drive</span>
+        </Link>
       </div>
 
       {/* PRODUCT DETAIL MODAL */}
@@ -391,13 +483,20 @@ function Layout({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {lastAdded && (
           <motion.div 
-            initial={{ opacity: 0, y: -20, scale: 0.9 }} 
-            animate={{ opacity: 1, y: 0, scale: 1 }} 
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            className="fixed top-24 left-1/2 -translate-x-1/2 z-[60] bg-gray-900/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 pointer-events-none"
+            key={lastAdded}
+            initial={{ opacity: 0, y: 50, scale: 0.9, x: "-50%" }} 
+            animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }} 
+            exit={{ opacity: 0, y: -20, scale: 0.8, x: "-50%" }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="fixed top-28 sm:top-32 left-1/2 z-[60] bg-gray-900/95 backdrop-blur-md text-white px-6 py-4 rounded-full shadow-[0_20px_40px_rgba(0,0,0,0.4)] flex items-center gap-4 border-[3px] border-gray-700 pointer-events-none min-w-[280px]"
           >
-             <div className="bg-[#25D366] text-white rounded-full p-1"><Plus className="w-4 h-4"/></div>
-             <span className="font-bold text-sm">{lastAdded} ajouté</span>
+             <div className="bg-[#FFC72C] text-[#DA291C] rounded-full p-1.5 shadow-inner border border-yellow-300">
+               <ShoppingBag className="w-5 h-5"/>
+             </div>
+             <div className="flex flex-col">
+               <span className="font-black text-sm uppercase tracking-wide">Panier mis à jour</span>
+               <span className="font-bold text-gray-400 text-xs">{lastAdded} ajouté avec succès</span>
+             </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -407,31 +506,51 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 // --- NEW COMPONENT: CART DRAWER (STEP 2 - VALIDATION) ---
 function CartDrawer({ onClose }: { onClose: () => void }) {
-  const { cart, getCartTotal, updateQuantity, removeFromCart, formatPriceC, whatsappLink } = useCart();
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber } = useCart();
+  const navigate = useNavigate();
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('emporter');
   const [customerName, setCustomerName] = useState('');
   const [address, setAddress] = useState('');
+  const [addressError, setAddressError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Step 3 - Transmission : Generate precise context-aware order for WhatsApp
+  // Step 3 - Transmission : Simulate server processing, then go to tracking.
   const handleFinalCheckout = () => {
     if (cart.length === 0) return;
     
-    let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*%0A%0A`;
-    message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}%0A`;
-    if (customerName) message += `*Nom :* ${customerName}%0A`;
-    if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}%0A`;
-    
-    message += `%0A*--- DÉTAIL DE LA COMMANDE ---*%0A`;
-    cart.forEach(item => {
-      message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})%0A`;
-      if (item.instructions) message += `   ↳ _Note: ${item.instructions}_%0A`;
-    });
-    
-    message += `%0A*--- RÉCAPITULATIF ---*%0A`;
-    message += `*Total à payer :* *${formatPriceC(getCartTotal())}*%0A%0A`;
-    message += `Merci de confirmer le temps de préparation et me valider ma commande ! 👍`;
+    // Validate Form Details
+    if (!customerName.trim()) {
+      alert("Veuillez saisir votre nom pour valider la commande.");
+      return;
+    }
+    if (orderMode === 'livraison' && !address.trim()) {
+      setAddressError("Veuillez saisir votre adresse de livraison.");
+      return;
+    } else {
+      setAddressError('');
+    }
 
-    window.open(`${whatsappLink}&text=${encodeURIComponent(message)}`, '_blank');
+    setIsProcessing(true);
+    
+    setTimeout(() => {
+      // CREATE TRACKING ORDER MOCK
+      setActiveOrder({
+         id: 'CMD-' + Math.floor(1000 + Math.random() * 9000),
+         status: 'en_route',
+         total: getCartTotal(),
+         items: [...cart], // clone to keep items
+         orderMode: orderMode,
+         address: address || 'Antananarivo, Centre',
+         customerName: customerName || 'Client',
+         etaMinutes: 25,
+         timestamp: Date.now()
+      });
+
+      clearCart();
+      setIsProcessing(false);
+      onClose();
+      navigate('/tracking');
+    }, 2000); // Premium smooth 2s loading
   };
 
   return (
@@ -498,10 +617,10 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                  <h3 className="font-black uppercase text-white mb-3 text-sm tracking-widest relative z-10 flex items-center gap-2"><Star className="w-4 h-4 text-[#FFC72C] fill-[#FFC72C]"/> Complétez votre repas</h3>
                  <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 pt-1 relative z-10">
                    {[
-                     { name: "Coca-Cola 50cl", price: 3000, img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300&q=80" },
-                     { name: "Frites XL", price: 2500, img: "https://images.unsplash.com/photo-1576107232684-1279f3908594?w=300&q=80" }
+                     { id: 'u1', name: "Coca-Cola 50cl", description: "Boisson fraîche", price: 3000, img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300&q=80", categoryId: '5' },
+                     { id: 'u2', name: "Frites XL", description: "Portion généreuse", price: 2500, img: "https://images.unsplash.com/photo-1576107232684-1279f3908594?w=300&q=80", categoryId: '1' }
                    ].map((upsell, i) => (
-                     <div key={i} className="bg-white/10 border border-white/20 rounded-xl p-3 shrink-0 w-[140px] flex flex-col items-center cursor-pointer hover:bg-white/20 transition-all backdrop-blur-sm">
+                     <div key={i} onClick={() => addToCart({id: upsell.id, name: upsell.name, description: upsell.description, price: upsell.price, image: upsell.img, categoryId: upsell.categoryId}, 1)} className="bg-white/10 border border-white/20 rounded-xl p-3 shrink-0 w-[140px] flex flex-col items-center cursor-pointer hover:bg-white/20 transition-all backdrop-blur-sm">
                        <img src={upsell.img} alt={upsell.name} className="w-16 h-16 object-cover rounded-lg mb-3 shadow-md" />
                        <span className="font-bold text-xs text-center text-white mb-1 line-clamp-1">{upsell.name}</span>
                        <span className="font-black text-[#FFC72C] text-xs">+{formatPriceC(upsell.price)}</span>
@@ -538,13 +657,16 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                       className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-bold placeholder-gray-400 outline-none focus:border-[#FFC72C] focus:bg-white transition-colors"
                     />
                     {orderMode === 'livraison' && (
-                      <input 
-                        type="text" 
-                        placeholder="Adresse Complète de Livraison*" 
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-bold placeholder-gray-400 outline-none focus:border-[#FFC72C] focus:bg-white transition-colors"
-                      />
+                      <div>
+                        <input 
+                          type="text" 
+                          placeholder="Adresse Complète de Livraison*" 
+                          value={address}
+                          onChange={(e) => { setAddress(e.target.value); setAddressError(''); }}
+                          className={`w-full bg-gray-50 border ${addressError ? 'border-red-500 bg-red-50' : 'border-gray-200'} p-3 rounded-xl text-sm font-bold placeholder-gray-400 outline-none focus:border-[#FFC72C] focus:bg-white transition-colors`}
+                        />
+                        {addressError && <p className="text-red-500 font-bold text-xs mt-1 px-1">{addressError}</p>}
+                      </div>
                     )}
                  </div>
               </div>
@@ -562,14 +684,42 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
              </div>
              
              <button 
-               onClick={handleFinalCheckout}
+               onClick={() => {
+                  if (!customerName.trim()) {
+                    alert("Veuillez saisir votre pseudo/nom pour la commande.");
+                    return;
+                  }
+                  if (orderMode === 'livraison' && !address.trim()) {
+                    setAddressError("Veuillez saisir votre adresse de livraison.");
+                    return;
+                  }
+                  
+                  let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*%0A%0A`;
+                  message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}%0A`;
+                  if (customerName) message += `*Nom :* ${customerName}%0A`;
+                  if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}%0A`;
+                  
+                  message += `%0A*--- DÉTAIL DE LA COMMANDE ---*%0A`;
+                  cart.forEach(item => {
+                    message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})%0A`;
+                    if (item.instructions) message += `   ↳ _Note: ${item.instructions}_%0A`;
+                  });
+                  
+                  message += `%0A*--- RÉCAPITULATIF ---*%0A`;
+                  message += `*Total à payer :* *${formatPriceC(getCartTotal())}*%0A%0A`;
+                  message += `Merci de valider ma commande ! 👍`;
+                  
+                  const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
+                  window.open(`${baseUrl}?text=${encodeURIComponent(message)}`, '_blank');
+               }}
                className="w-full bg-[#25D366] text-white py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 hover:bg-[#1DA851] transition-all shadow-[0_10px_20px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#188c43] active:border-b-0 active:translate-y-[5px]"
              >
                 <MessageCircle className="w-6 h-6 border-2 border-white rounded-full p-0.5" />
                 Commander sur WhatsApp
              </button>
+             
              <p className="text-center text-xs font-bold text-gray-400 mt-4 leading-tight">
-               Vous serez redirigé vers WhatsApp pour finaliser le paiement et suivre votre commande en direct.
+               Vous finaliserez le paiement et le suivi de commande de manière sécurisée en direct via WhatsApp.
              </p>
           </div>
         )}
@@ -600,11 +750,37 @@ function PageHome() {
               <motion.img 
                 animate={{ y: [0, -15, 0], rotate: [0, 2, 0] }} 
                 transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                src={PRODUCTS[0].image} alt="Mega Burger" className="w-full relative z-10 filter drop-shadow-2xl scale-110 sm:scale-125" 
+                src={PRODUCTS[0].image} alt="Mega Burger" className="w-full relative z-10 filter drop-shadow-2xl scale-110 sm:scale-125 hover:scale-150 transition-transform duration-700 cursor-pointer" 
               />
            </div>
         </div>
       </div>
+
+      {/* INFINITE MARQUEE */}
+      <div className="bg-gray-900 overflow-hidden py-3 border-y-[4px] border-[#FFC72C]">
+         <motion.div 
+           animate={{ x: ["0%", "-50%"] }} 
+           transition={{ ease: "linear", duration: 15, repeat: Infinity }}
+           className="flex whitespace-nowrap gap-8 text-[#FFC72C] font-black uppercase tracking-widest text-lg items-center"
+         >
+            <span>🍔 Double Viande</span>
+            <span className="text-white">•</span>
+            <span>🔥 Edition Limitée</span>
+            <span className="text-white">•</span>
+            <span>🍟 Frites XL Offertes</span>
+            <span className="text-white">•</span>
+            <span>🛵 Livraison Express</span>
+            <span className="text-white">•</span>
+            <span>🍔 Double Viande</span>
+            <span className="text-white">•</span>
+            <span>🔥 Edition Limitée</span>
+            <span className="text-white">•</span>
+            <span>🍟 Frites XL Offertes</span>
+            <span className="text-white">•</span>
+            <span>🛵 Livraison Express</span>
+         </motion.div>
+      </div>
+
       {/* QUICK CATEGORIES */}
       <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -642,13 +818,37 @@ function PageHome() {
 }
 
 function PageMenu() {
-  const [activeCategory, setActiveCategory] = useState('1');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // API State
+  const [products, setProducts] = useState<typeof PRODUCTS>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredProducts = PRODUCTS.filter(p => {
+  const fetchMenu = () => {
+    setIsLoading(true);
+    setError(null);
+    simulateApiCall(PRODUCTS, 0.4) // 40% fail rate for simulation
+      .then(res => {
+        setProducts(res);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        setError(err.message);
+        setIsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchMenu();
+  }, []);
+
+  const filteredProducts = products.filter(p => {
     if (searchQuery.trim() !== '') {
       return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase());
     }
+    if (activeCategory === 'all') return true;
     return p.categoryId === activeCategory;
   });
 
@@ -690,7 +890,14 @@ function PageMenu() {
           {searchQuery ? 'Résultats de recherche' : CATEGORIES.find(c => c.id === activeCategory)?.name}
         </h1>
         
-        {filteredProducts.length === 0 ? (
+        {isLoading ? (
+          <div className="py-20 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-8 border-gray-100 border-t-[#DA291C] rounded-full animate-spin mb-4"></div>
+            <p className="font-bold text-gray-500 uppercase tracking-widest text-sm">Chargement du Menu...</p>
+          </div>
+        ) : error ? (
+          <ApiErrorState message={error} onRetry={fetchMenu} />
+        ) : filteredProducts.length === 0 ? (
            <div className="py-20 text-center">
              <span className="text-6xl mb-4 block">🥺</span>
              <h3 className="font-black text-2xl text-gray-900 mb-2">Aucun résultat</h3>
@@ -713,16 +920,23 @@ function PageMenu() {
 }
 
 function PageLoyalty() {
-  const { formatPriceC, isLoggedIn, setIsLoggedIn } = useCart();
+  const { formatPriceC, isLoggedIn, setIsLoggedIn, activeOrder } = useCart();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleFakeLogin = () => {
     setIsLoggingIn(true);
-    // Simulate network delay for the demo
-    setTimeout(() => {
-      setIsLoggedIn(true);
-      setIsLoggingIn(false);
-    }, 1500);
+    setLoginError(null);
+    simulateApiCall(true, 0.4, 1500)
+      .then(() => {
+        setIsLoggedIn(true);
+        setIsLoggingIn(false);
+      })
+      .catch(err => {
+        setLoginError("Impossible de se connecter au serveur d'authentification. Veuillez réessayer.");
+        setIsLoggingIn(false);
+      });
   };
 
   if (!isLoggedIn) {
@@ -780,6 +994,14 @@ function PageLoyalty() {
             >
                Me connecter
             </button>
+            
+            {loginError && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-red-50 text-red-600 font-bold text-sm p-4 rounded-xl text-center border border-red-100 flex items-start gap-3 mt-2">
+                 <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                 <p>{loginError}</p>
+              </motion.div>
+            )}
+
             <p className="text-center font-bold text-xs text-gray-400 mt-4 px-4">
               En vous connectant, la structure Firebase (auth token) s'activera lors de la prod.
             </p>
@@ -851,6 +1073,22 @@ function PageLoyalty() {
             </div>
          </motion.div>
 
+         {/* ACTIVE ORDER TRACKING IN LOYALTY */}
+         {activeOrder && (
+           <div className="mt-8 relative z-20">
+             <div onClick={() => navigate('/tracking')} className="bg-[#DA291C] text-white p-4 rounded-2xl flex items-center justify-between cursor-pointer shadow-[0_4px_15px_rgba(218,41,28,0.4)] hover:scale-[1.02] active:scale-95 transition-all border-b-[4px] border-red-900 active:border-b-0 active:translate-y-[4px]">
+               <div className="flex items-center gap-4">
+                 <div className="bg-white/20 p-2 rounded-full"><Bike className="w-6 h-6 text-white"/></div>
+                 <div>
+                   <h4 className="font-black text-sm uppercase tracking-wider">Commande en cours</h4>
+                   <p className="font-bold text-xs text-red-100">Suivi en temps réel</p>
+                 </div>
+               </div>
+               <ChevronRight className="w-5 h-5"/>
+             </div>
+           </div>
+         )}
+         
          {/* REWARDS LIST */}
          <div className="mt-8">
             <h3 className="font-black text-xl uppercase tracking-tight text-gray-900 mb-4">Débloquez vos cadeaux</h3>
@@ -870,7 +1108,17 @@ function PageLoyalty() {
                         {reward.pts} points {reward.locked && <span className="ml-1 text-xs">({reward.pts - 1250} restants)</span>}
                      </p>
                    </div>
-                   {!reward.locked && <button className="bg-[#DA291C] text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-[0_4px_10px_rgba(218,41,28,0.3)] hover:scale-105 transition-transform active:scale-95">Obtenir</button>}
+                   {!reward.locked && (
+                     <button 
+                       onClick={() => {
+                          alert(`Félicitations! Vous avez échangé vos points contre: ${reward.desc}. Retrouvez-le dans votre panier.`);
+                          navigate('/menu');
+                       }}
+                       className="bg-[#DA291C] text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-[0_4px_10px_rgba(218,41,28,0.3)] hover:scale-105 transition-transform active:scale-95"
+                     >
+                       Obtenir
+                     </button>
+                   )}
                 </div>
               ))}
             </div>
@@ -905,8 +1153,30 @@ function PageRestaurants() {
   const { country } = useCart();
   const currentCountry = COUNTRIES[country];
   
+  const [restaurants, setRestaurants] = useState<typeof RESTAURANTS>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRestaurants = () => {
+    setIsLoading(true);
+    setError(null);
+    simulateApiCall(RESTAURANTS, 0.3)
+      .then(res => {
+        setRestaurants(res);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        setError(err.message);
+        setIsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchRestaurants();
+  }, [country]);
+
   // Create dynamic restaurants if we want to ensure SN has at least one example
-  const displayRestaurants = RESTAURANTS.filter(r => r.country === country);
+  const displayRestaurants = restaurants.filter(r => r.country === country);
 
   if (displayRestaurants.length === 0 && country === 'SN') {
     // Inject a dummy for SN if none is hardcoded in the list
@@ -925,22 +1195,31 @@ function PageRestaurants() {
       </div>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayRestaurants.map(r => (
-            <div key={r.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="font-black text-xl uppercase tracking-tighter text-gray-900">{r.name}</h3>
-                <span className="bg-gray-100 text-gray-600 text-[10px] font-black uppercase px-2 py-1 rounded">{r.type}</span>
+        {isLoading ? (
+          <div className="py-20 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-8 border-gray-100 border-t-[#DA291C] rounded-full animate-spin mb-4"></div>
+            <p className="font-bold text-gray-500 uppercase tracking-widest text-sm">Géolocalisation...</p>
+          </div>
+        ) : error ? (
+          <ApiErrorState message={error} onRetry={fetchRestaurants} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayRestaurants.map(r => (
+              <div key={r.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="font-black text-xl uppercase tracking-tighter text-gray-900">{r.name}</h3>
+                  <span className="bg-gray-100 text-gray-600 text-[10px] font-black uppercase px-2 py-1 rounded">{r.type}</span>
+                </div>
+                <p className="font-bold text-gray-500 mb-2"><span className="text-gray-400">📍</span> {r.address}</p>
+                <p className="font-bold text-gray-500 mb-4"><span className="text-gray-400">📞</span> {r.phone}</p>
+                <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
+                  <span className="text-sm font-black text-[#25D366]">{r.status}</span>
+                  {r.distance && <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">{r.distance}</span>}
+                </div>
               </div>
-              <p className="font-bold text-gray-500 mb-2"><span className="text-gray-400">📍</span> {r.address}</p>
-              <p className="font-bold text-gray-500 mb-4"><span className="text-gray-400">📞</span> {r.phone}</p>
-              <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
-                <span className="text-sm font-black text-[#25D366]">{r.status}</span>
-                {r.distance && <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">{r.distance}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -951,7 +1230,7 @@ const ProductCard: React.FC<{ product: ProductInfo }> = ({ product }) => {
   const { setSelectedProduct, formatPriceC } = useCart();
   return (
     <motion.div 
-      whileHover={{ y: -5 }}
+      whileHover={{ y: -5, scale: 1.02 }}
       onClick={() => setSelectedProduct(product)} 
       className={`bg-white rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 hover:shadow-2xl hover:border-gray-200 hover:ring-4 hover:ring-gray-50 transition-all duration-300 flex flex-col group cursor-pointer h-full relative`}
     >
@@ -970,8 +1249,8 @@ const ProductCard: React.FC<{ product: ProductInfo }> = ({ product }) => {
             {product.oldPrice && <span className="text-xs font-black text-gray-400 line-through mb-0.5">{formatPriceC(product.oldPrice)}</span>}
             <span className="font-black text-[22px] tracking-tight text-[#DA291C]">{formatPriceC(product.price)}</span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); }} className="bg-[#FFC72C] hover:bg-yellow-400 text-[#DA291C] w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-[0_4px_15px_rgba(255,199,44,0.4)] hover:scale-105 active:scale-95 border-b-[4px] border-yellow-600 active:border-b-0 active:translate-y-[4px]">
-            <Plus className="w-6 h-6 stroke-[3]" />
+          <button onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); }} className="bg-[#FFC72C] hover:bg-yellow-400 text-[#DA291C] w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-[0_4px_15px_rgba(255,199,44,0.4)] hover:scale-110 active:scale-95 border-b-[4px] border-yellow-600 active:border-b-0 active:translate-y-[4px]">
+            <ShoppingBag className="w-5 h-5 stroke-[2.5]" />
           </button>
         </div>
       </div>
@@ -1071,3 +1350,270 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
     </motion.div>
   );
 };
+
+// --- TRACKING PAGE REAL-TIME GPS COMPONENT ---
+function MapAutoUpdater({ driverPos }: { driverPos: [number, number] }) {
+  const mapInstance = useMap();
+  useEffect(() => {
+    if (mapInstance && driverPos) {
+       mapInstance.setView(driverPos, mapInstance.getZoom(), { animate: true });
+    }
+  }, [driverPos, mapInstance]);
+  return null;
+}
+
+// --- TRACKING PAGE ---
+function PageTracking() {
+  const { activeOrder, formatPriceC, whatsappNumber } = useCart();
+  const navigate = useNavigate();
+  const storePos: [number, number] = [-18.910012, 47.525581];
+  const destPos: [number, number] = activeOrder?.orderMode === 'livraison' ? [-18.918000, 47.532000] : storePos;
+  
+  const [pos, setPos] = useState<[number, number]>(storePos);
+  const [isLiveGPS, setIsLiveGPS] = useState(false);
+  const [dynamicEta, setDynamicEta] = useState<number>(activeOrder?.etaMinutes || 0);
+
+  // DYNAMIC ETA CALCULATION
+  useEffect(() => {
+     if (activeOrder?.orderMode === 'livraison') {
+       const distMeters = L.latLng(pos).distanceTo(L.latLng(destPos));
+       // Real-time Traffic simulation: 350 meters per minute + 2 mins parking
+       const calculatedMinutes = Math.max(1, Math.ceil((distMeters / 350) + 2));
+       setDynamicEta(calculatedMinutes);
+     } else {
+       setDynamicEta(activeOrder?.etaMinutes || 0);
+     }
+  }, [pos, destPos, activeOrder]);
+
+  // INTEGRATION ACTUAL GPS DATA
+  useEffect(() => {
+    if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
+
+    let watchId: number;
+    let isSubscribed = true;
+
+    // Use Actual GPS Data if the browser supports it (Simulating the Driver's perspective feeding live coordinates)
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          if (isSubscribed) {
+            setPos([position.coords.latitude, position.coords.longitude]);
+            setIsLiveGPS(true); // Successfully receiving real physical GPS coordinates
+          }
+        },
+        (error) => {
+          console.warn("Actual GPS integration failed. Falling back to server-simulated mock stream.", error);
+          setIsLiveGPS(false);
+          // Fallback to Server Simulation mode
+          let t = 0;
+          const interval = setInterval(() => {
+            t += 0.05; // 5% per tick
+            if (t > 1) t = 1;
+            // Simulated API Stream equivalent
+            const jitterLat = (Math.random() - 0.5) * 0.0003;
+            const jitterLng = (Math.random() - 0.5) * 0.0003;
+            const lat = storePos[0] + (destPos[0] - storePos[0]) * t + jitterLat;
+            const lng = storePos[1] + (destPos[1] - storePos[1]) * t + jitterLng;
+            if (isSubscribed) setPos([lat, lng]);
+            if (t >= 1) clearInterval(interval);
+          }, 1500);
+          return () => clearInterval(interval);
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      );
+    }
+
+    return () => {
+      isSubscribed = false;
+      if (watchId !== undefined && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [activeOrder]);
+
+  const sendToWhatsApp = () => {
+    if (!activeOrder) return;
+    let message = `*🔴 INFOS SUR MA COMMANDE ${activeOrder.id}*%0A%0A`;
+    message += `*Nom :* ${activeOrder.customerName}%0A`;
+    message += `%0A*--- DÉTAIL DE LA COMMANDE ---*%0A`;
+    activeOrder.items.forEach((item: any) => {
+      message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})%0A`;
+      if (item.instructions) message += `   ↳ _Note: ${item.instructions}_%0A`;
+    });
+    message += `%0A*Total :* *${formatPriceC(activeOrder.total)}*%0A%0A`;
+    message += `J'aimerais avoir une information à propos de l'avancement ! 👍`;
+    
+    const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
+    window.open(`${baseUrl}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  if (!activeOrder) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center">
+         <Navigation className="w-20 h-20 text-gray-200 mb-6" />
+         <h2 className="font-black text-2xl text-gray-900 mb-2">Aucune commande en cours</h2>
+         <p className="text-gray-500 font-bold mb-6">Vous n'avez aucune livraison active pour le moment.</p>
+         <button onClick={() => navigate('/menu')} className="bg-[#DA291C] text-white px-8 py-3 rounded-xl font-black shadow-[0_4px_15px_rgba(218,41,28,0.4)] border-b-[3px] border-red-900 active:border-b-0 active:translate-y-[3px]">Voir le Menu</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50 pb-24 sm:pb-8">
+      {/* Tracker Status Banner */}
+      <div className="bg-white border-b border-gray-200 shadow-sm z-20 relative">
+        <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div>
+               <span className="bg-[#DA291C]/10 text-[#DA291C] px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-3 inline-block">
+                 {activeOrder.orderMode === 'livraison' ? 'Livraison en cours' : 'À récupérer'}
+               </span>
+               <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-2">Commande {activeOrder.id}</h1>
+               <p className="text-gray-500 font-bold flex items-center gap-2"><MapPin className="w-4 h-4" /> {activeOrder.address}</p>
+            </div>
+            
+            <div className="flex gap-6 w-full md:w-auto bg-gray-50 p-4 rounded-xl border border-gray-100">
+               <div>
+                  <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Montant payé</span>
+                  <span className="text-xl font-black text-gray-900">{formatPriceC(activeOrder.total)}</span>
+               </div>
+               <div className="border-l border-gray-200 pl-6">
+                  <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Heure estimée</span>
+                  <span className="text-xl font-black text-[#25D366] flex items-center gap-1"><Timer className="w-5 h-5"/> {dynamicEta} min</span>
+               </div>
+            </div>
+          </div>
+          
+          {/* Progress Bar Mock */}
+          <div className="mt-8">
+             <div className="flex justify-between mb-2 text-xs font-bold text-gray-400 uppercase">
+                <span className="text-[#DA291C]">Préparation</span>
+                <span className={activeOrder.orderMode === 'livraison' ? 'text-[#FFC72C]' : ''}>En route</span>
+                <span>Livré</span>
+             </div>
+             <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+                <motion.div initial={{ width: "30%" }} animate={{ width: "65%" }} transition={{ duration: 2 }} className="bg-gradient-to-r from-[#DA291C] to-[#FFC72C] h-full rounded-full" />
+             </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Content Grid */}
+      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col lg:flex-row gap-8">
+        
+        {/* Left Column: Order Details Receipt */}
+        <div className="w-full lg:w-96 flex flex-col gap-6 shrink-0 z-10">
+           <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-gray-100 relative overflow-hidden">
+             
+             {/* Receipt Visual effect */}
+             <div className="absolute top-0 left-0 w-full h-3 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 blur-[1px]"></div>
+             <div className="absolute -left-4 top-1/2 w-8 h-8 rounded-full bg-gray-50 border-r border-gray-100"></div>
+             <div className="absolute -right-4 top-1/2 w-8 h-8 rounded-full bg-gray-50 border-l border-gray-100"></div>
+             <div className="border-b-2 border-dashed border-gray-200 absolute top-1/2 left-4 right-4 z-0"></div>
+
+             <div className="relative z-10 pb-6 mb-6">
+                <h3 className="font-black text-gray-900 uppercase tracking-widest text-lg mb-4 flex justify-between items-center">
+                  Mon Reçu 
+                  <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded-lg text-[10px]">Facture en ligne</span>
+                </h3>
+                <div className="space-y-4">
+                  {activeOrder.items.map((item: any, idx: number) => (
+                     <div key={idx} className="flex justify-between items-start text-sm">
+                        <div className="max-w-[70%]">
+                           <p className="font-black text-gray-800"><span className="text-[#DA291C] mr-1">{item.quantity}x</span> {item.product.name}</p>
+                           {item.instructions && <p className="text-xs font-bold text-gray-400 mt-1 italic line-clamp-1">{item.instructions}</p>}
+                        </div>
+                        <p className="font-black text-gray-900 shrink-0">{formatPriceC(item.product.price * item.quantity)}</p>
+                     </div>
+                  ))}
+                </div>
+             </div>
+             
+             <div className="relative z-10 pt-4">
+                <div className="flex justify-between items-center mb-1">
+                   <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Sous-Total</p>
+                   <p className="font-black text-gray-700">{formatPriceC(activeOrder.total)}</p>
+                </div>
+                <div className="flex justify-between items-center mb-4">
+                   <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Livraison</p>
+                   <p className="font-black text-gray-700">{activeOrder.orderMode === 'livraison' ? formatPriceC(2000) : '0 Fcfa'}</p>
+                </div>
+                
+                <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
+                   <p className="font-black text-gray-400 uppercase tracking-widest text-sm">Total payé</p>
+                   <p className="font-black text-3xl text-gray-900">{formatPriceC(activeOrder.total + (activeOrder.orderMode === 'livraison' ? 2000 : 0))}</p>
+                </div>
+             </div>
+           </div>
+
+           {/* Support Button */}
+           <button onClick={sendToWhatsApp} className="w-full flex items-center justify-center gap-3 bg-[#25D366] text-white py-4 px-6 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-green-500/20 hover:scale-[1.02] active:scale-95 transition-all border-b-[4px] border-green-700 active:border-b-0 active:translate-y-[4px]">
+             <MessageCircle className="w-6 h-6" /> Contacter le Support
+           </button>
+        </div>
+
+        {/* Right Column: Map Content */}
+        <div className="flex-1 flex flex-col min-h-[400px]">
+          {activeOrder.orderMode === 'livraison' ? (
+            <div className="bg-white rounded-[2rem] p-2 border border-gray-200 shadow-xl overflow-hidden flex-1 relative min-h-[500px]">
+              <MapContainer center={storePos} zoom={14} style={{ height: '100%', width: '100%', borderRadius: '1.75rem' }} zoomControl={false}>
+                <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                <Marker position={storePos} icon={storeIcon}><Popup>Restaurant La Gastronomie</Popup></Marker>
+                <Marker position={destPos} icon={homeIcon}><Popup>Adresse de Livraison</Popup></Marker>
+                <Polyline positions={[storePos, destPos]} pathOptions={{ color: '#DA291C', weight: 4, dashArray: '8, 8' }} />
+                <Marker position={pos} icon={bikeIcon}><Popup>Votre livreur est en route !</Popup></Marker>
+                <MapAutoUpdater driverPos={pos} />
+              </MapContainer>
+              
+              {/* Overlay Driver Info */}
+              <div className="absolute bottom-6 left-6 right-6 lg:left-auto lg:right-6 lg:w-80 bg-white/95 backdrop-blur-md border border-gray-200 rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.15)] z-[1000] flex flex-col gap-3">
+                 {isLiveGPS && (
+                   <div className="flex items-center gap-2 text-[10px] font-black uppercase text-green-600 bg-green-50 w-fit px-2 py-1 rounded-md tracking-widest border border-green-200">
+                     <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping inline-block"></span>
+                     Signal GPS Connecté
+                   </div>
+                 )}
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-4">
+                     <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-3xl shrink-0">👨‍🍳</div>
+                     <div>
+                       <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Votre Livreur</span>
+                       <h3 className="font-black text-gray-900 text-lg leading-tight">Christian T.</h3>
+                       <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /></div>
+                     </div>
+                   </div>
+                   <button className="bg-[#DA291C] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
+                     <Phone className="w-5 h-5 fill-current" />
+                   </button>
+                 </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl p-10 border border-gray-200 shadow-xl text-center flex flex-col items-center justify-center h-full">
+              <ShoppingBag className="w-24 h-24 text-[#DA291C] mb-8" />
+              <h2 className="text-4xl font-black text-gray-900 uppercase tracking-tight mb-4">Préparation en cours</h2>
+              <p className="text-gray-500 font-bold mb-8 max-w-lg text-lg">Veuillez vous présenter au comptoir du restaurant avec le numéro de commande de manière à récupérer votre commande chaude.</p>
+              <div className="bg-gray-50 border border-gray-200 px-10 py-8 rounded-3xl">
+                 <span className="text-sm font-black uppercase text-gray-400 block mb-2">Code de Retrait</span>
+                 <span className="text-5xl font-black text-gray-900 tracking-widest">{activeOrder.id}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
+function PageRecrutement() {
+  const navigate = useNavigate();
+  return (
+    <div className="bg-white min-h-[70vh] flex flex-col items-center justify-center p-6 text-center">
+      <div className="w-24 h-24 bg-gray-50 rounded-3xl flex items-center justify-center text-5xl mb-6 shadow-inner border border-gray-100">🚀</div>
+      <h1 className="font-black text-4xl text-gray-900 uppercase tracking-tight mb-4">Rejoignez l'Équipe</h1>
+      <p className="text-gray-500 font-bold mb-8 max-w-lg">Nous préparons quelque chose de grand. Le portail de recrutement sera bientôt disponible en ligne pour trouver nos prochains talents G.</p>
+      <button onClick={() => navigate('/')} className="bg-gray-900 text-white px-8 py-3 rounded-xl font-black hover:bg-gray-800 transition-colors">Retour à l'Accueil</button>
+    </div>
+  );
+}
