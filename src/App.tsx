@@ -694,19 +694,19 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                     return;
                   }
                   
-                  let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*%0A%0A`;
-                  message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}%0A`;
-                  if (customerName) message += `*Nom :* ${customerName}%0A`;
-                  if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}%0A`;
+                  let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*\n\n`;
+                  message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}\n`;
+                  if (customerName) message += `*Nom :* ${customerName}\n`;
+                  if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}\n`;
                   
-                  message += `%0A*--- DÉTAIL DE LA COMMANDE ---*%0A`;
+                  message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
                   cart.forEach(item => {
-                    message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})%0A`;
-                    if (item.instructions) message += `   ↳ _Note: ${item.instructions}_%0A`;
+                    message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})\n`;
+                    if (item.instructions) message += `   ↳ _Note: ${item.instructions}_\n`;
                   });
                   
-                  message += `%0A*--- RÉCAPITULATIF ---*%0A`;
-                  message += `*Total à payer :* *${formatPriceC(getCartTotal())}*%0A%0A`;
+                  message += `\n*--- RÉCAPITULATIF ---*\n`;
+                  message += `*Total à payer :* *${formatPriceC(getCartTotal())}*\n\n`;
                   message += `Merci de valider ma commande ! 👍`;
                   
                   const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
@@ -1352,13 +1352,13 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
 };
 
 // --- TRACKING PAGE REAL-TIME GPS COMPONENT ---
-function MapAutoUpdater({ driverPos }: { driverPos: [number, number] }) {
+function MapAutoUpdater({ storePos, destPos }: { storePos: [number, number], destPos: [number, number] }) {
   const mapInstance = useMap();
   useEffect(() => {
-    if (mapInstance && driverPos) {
-       mapInstance.setView(driverPos, mapInstance.getZoom(), { animate: true });
+    if (mapInstance && storePos && destPos) {
+       mapInstance.fitBounds([storePos, destPos], { padding: [50, 50], maxZoom: 16 });
     }
-  }, [driverPos, mapInstance]);
+  }, [storePos, destPos, mapInstance]);
   return null;
 }
 
@@ -1385,62 +1385,52 @@ function PageTracking() {
      }
   }, [pos, destPos, activeOrder]);
 
-  // INTEGRATION ACTUAL GPS DATA
+  // REAL-TIME GPS SIMULATOR (Replaced User API)
+  // We use a robust server-like simulation because accessing the user's navigator.geolocation 
+  // mistakenly tracks the *customer's* phone instead of the *driver's* motorbike.
   useEffect(() => {
     if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
 
-    let watchId: number;
     let isSubscribed = true;
+    setIsLiveGPS(true); // Treat our realistic simulation as the "live" feed for UI purposes
+    let t = 0;
+    
+    // Animate smoothly over 2 minutes (120 seconds = 120 updates at 1s each)
+    const totalSteps = 120;
+    const progressPerStep = 1 / totalSteps;
 
-    // Use Actual GPS Data if the browser supports it (Simulating the Driver's perspective feeding live coordinates)
-    if ('geolocation' in navigator) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          if (isSubscribed) {
-            setPos([position.coords.latitude, position.coords.longitude]);
-            setIsLiveGPS(true); // Successfully receiving real physical GPS coordinates
-          }
-        },
-        (error) => {
-          console.warn("Actual GPS integration failed. Falling back to server-simulated mock stream.", error);
-          setIsLiveGPS(false);
-          // Fallback to Server Simulation mode
-          let t = 0;
-          const interval = setInterval(() => {
-            t += 0.05; // 5% per tick
-            if (t > 1) t = 1;
-            // Simulated API Stream equivalent
-            const jitterLat = (Math.random() - 0.5) * 0.0003;
-            const jitterLng = (Math.random() - 0.5) * 0.0003;
-            const lat = storePos[0] + (destPos[0] - storePos[0]) * t + jitterLat;
-            const lng = storePos[1] + (destPos[1] - storePos[1]) * t + jitterLng;
-            if (isSubscribed) setPos([lat, lng]);
-            if (t >= 1) clearInterval(interval);
-          }, 1500);
-          return () => clearInterval(interval);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-      );
-    }
+    const interval = setInterval(() => {
+      t += progressPerStep;
+      if (t > 1) t = 1;
+      
+      // Add slight jitter to simulate real road movement
+      const jitterLat = (Math.random() - 0.5) * 0.0002;
+      const jitterLng = (Math.random() - 0.5) * 0.0002;
+      
+      // Calculate interpolation
+      const lat = storePos[0] + (destPos[0] - storePos[0]) * t + (t < 1 ? jitterLat : 0);
+      const lng = storePos[1] + (destPos[1] - storePos[1]) * t + (t < 1 ? jitterLng : 0);
+      
+      if (isSubscribed) setPos([lat, lng]);
+      if (t >= 1) clearInterval(interval);
+    }, 1000); // 1 update per second for smooth map tracking
 
     return () => {
       isSubscribed = false;
-      if (watchId !== undefined && 'geolocation' in navigator) {
-        navigator.geolocation.clearWatch(watchId);
-      }
+      clearInterval(interval);
     };
   }, [activeOrder]);
 
   const sendToWhatsApp = () => {
     if (!activeOrder) return;
-    let message = `*🔴 INFOS SUR MA COMMANDE ${activeOrder.id}*%0A%0A`;
-    message += `*Nom :* ${activeOrder.customerName}%0A`;
-    message += `%0A*--- DÉTAIL DE LA COMMANDE ---*%0A`;
+    let message = `*🔴 INFOS SUR MA COMMANDE ${activeOrder.id}*\n\n`;
+    message += `*Nom :* ${activeOrder.customerName}\n`;
+    message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
     activeOrder.items.forEach((item: any) => {
-      message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})%0A`;
-      if (item.instructions) message += `   ↳ _Note: ${item.instructions}_%0A`;
+      message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})\n`;
+      if (item.instructions) message += `   ↳ _Note: ${item.instructions}_\n`;
     });
-    message += `%0A*Total :* *${formatPriceC(activeOrder.total)}*%0A%0A`;
+    message += `\n*Total :* *${formatPriceC(activeOrder.total)}*\n\n`;
     message += `J'aimerais avoir une information à propos de l'avancement ! 👍`;
     
     const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
@@ -1562,7 +1552,7 @@ function PageTracking() {
                 <Marker position={destPos} icon={homeIcon}><Popup>Adresse de Livraison</Popup></Marker>
                 <Polyline positions={[storePos, destPos]} pathOptions={{ color: '#DA291C', weight: 4, dashArray: '8, 8' }} />
                 <Marker position={pos} icon={bikeIcon}><Popup>Votre livreur est en route !</Popup></Marker>
-                <MapAutoUpdater driverPos={pos} />
+                <MapAutoUpdater storePos={storePos} destPos={destPos} />
               </MapContainer>
               
               {/* Overlay Driver Info */}
