@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Config": {
+      "title": "Application Configuration",
+      "description": "Global settings for the web app",
+      "type": "object",
+      "properties": {
+        "brandName": { "type": "string" },
+        "heroTitle1": { "type": "string" },
+        "heroTitle2": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "deliveryFee": { "type": "number" }
+      },
+      "required": ["brandName", "whatsappNumber"]
+    },
+    "Category": {
+      "title": "Menu Category",
+      "description": "Category for products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "textColor": { "type": "string" },
+        "orderId": { "type": "number" }
+      },
+      "required": ["name"]
+    },
+    "Product": {
+      "title": "Product Item",
+      "description": "A food item in the menu",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "oldPrice": { "type": "number" },
+        "image": { "type": "string" },
+        "badge": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "popular": { "type": "boolean" }
+      },
+      "required": ["name", "price", "image"]
+    },
+    "Order": {
+      "title": "Customer Order",
+      "description": "An order placed by a customer",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "total": { "type": "number" },
+        "items": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "delivering", "completed", "canceled"]
+        },
+        "orderMode": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerName", "total", "status"]
+    },
+    "Admin": {
+      "title": "Admin Role",
+      "description": "Admin access list",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/config/{configId}": {
+      "schema": { "$ref": "#/entities/Config" },
+      "description": "Store config, normally configId is just 'main'"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Product categories"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Menu products"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders"
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "RBAC verification for admins"
+    }
+  }
+}

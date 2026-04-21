@@ -9,6 +9,8 @@ import {
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import AdminApp from './Admin';
+import { useFirestore } from './hooks/useFirestore';
 
 // --- ROBUST API SIMULATION UTILITY ---
 const simulateApiCall = <T,>(data: T, failureRate: number = 0.3, delay: number = 800): Promise<T> => {
@@ -120,9 +122,40 @@ interface CartContextType {
   activeOrder: any;
   setActiveOrder: (order: any) => void;
   clearCart: () => void;
+  // Dynamic Global Data
+  globalProducts: ProductInfo[];
+  globalCategories: any[];
+  globalConfig: any;
 }
 const CartContext = createContext<CartContextType | null>(null);
 const useCart = () => { const ctx = useContext(CartContext); if (!ctx) throw new Error("Missing CartProvider"); return ctx; };
+
+const AppWithRouter = () => {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
+
+  return (
+    <>
+      <AnimatePresence mode="popLayout" onExitComplete={() => window.scrollTo(0, 0)}>
+        <Routes>
+          <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="*" element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<PageHome />} />
+                <Route path="/menu" element={<PageMenu />} />
+                <Route path="/app-fidelite" element={<PageLoyalty />} />
+                <Route path="/restaurants" element={<PageRestaurants />} />
+                <Route path="/tracking" element={<PageTracking />} />
+                <Route path="/recrutement" element={<PageRecrutement />} />
+              </Routes>
+            </Layout>
+          } />
+        </Routes>
+      </AnimatePresence>
+    </>
+  );
+};
 
 // --- MAIN APP ---
 export default function App() {
@@ -133,6 +166,25 @@ export default function App() {
   const [country, setCountry] = useState<keyof typeof COUNTRIES>('MG');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any>(null);
+
+  // Sync state with localstorage
+  useEffect(() => {
+    const savedCart = localStorage.getItem('gastro_cart');
+    if (savedCart) setCart(JSON.parse(savedCart));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('gastro_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  // Dynamic Data placeholder logic to fallback while hook is implemented
+  const { data: globalProductsData } = useFirestore('products');
+  const { data: globalCategoriesData } = useFirestore('categories', 'orderId');
+  const { data: globalConfigData } = useFirestore('config', 'brandName');
+
+  const globalProducts = globalProductsData.length > 0 ? globalProductsData : PRODUCTS;
+  const globalCategories = globalCategoriesData.length > 0 ? globalCategoriesData : CATEGORIES;
+  const globalConfig = globalConfigData.length > 0 ? globalConfigData[0] : null;
 
   const addToCart = (product: ProductInfo, quantity: number, instructions: string = '') => {
     setCart(prev => {
@@ -174,24 +226,13 @@ export default function App() {
     return new Intl.NumberFormat('fr-MG', { style: 'currency', currency: 'MGA', minimumFractionDigits: 0 }).format(price);
   };
 
-  const whatsappNumber = COUNTRIES[country].phone;
+  const whatsappNumber = globalConfig?.whatsappNumber || COUNTRIES[country].phone;
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=Bonjour,%20je%20souhaite%20commander.`;
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder }}>
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder, globalProducts, globalCategories, globalConfig }}>
       <Router>
-        <Layout>
-          <AnimatePresence mode="popLayout" onExitComplete={() => window.scrollTo(0, 0)}>
-            <Routes>
-              <Route path="/" element={<PageHome />} />
-              <Route path="/menu" element={<PageMenu />} />
-              <Route path="/app-fidelite" element={<PageLoyalty />} />
-              <Route path="/restaurants" element={<PageRestaurants />} />
-              <Route path="/tracking" element={<PageTracking />} />
-              <Route path="/recrutement" element={<PageRecrutement />} />
-            </Routes>
-          </AnimatePresence>
-        </Layout>
+        <AppWithRouter />
       </Router>
     </CartContext.Provider>
   );
@@ -513,9 +554,11 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
   const [address, setAddress] = useState('');
   const [addressError, setAddressError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  const { add: addOrder } = useFirestore('orders'); // Real-time order syncer
 
   // Step 3 - Transmission : Simulate server processing, then go to tracking.
-  const handleFinalCheckout = () => {
+  const handleFinalCheckout = async () => {
     if (cart.length === 0) return;
     
     // Validate Form Details
@@ -532,19 +575,28 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
 
     setIsProcessing(true);
     
+    const newOrderData = {
+       id: 'CMD-' + Math.floor(1000 + Math.random() * 9000), // Human ID
+       status: 'en_route',
+       total: getCartTotal(),
+       items: [...cart], // clone to keep items
+       orderMode: orderMode,
+       address: address || 'Antananarivo, Centre',
+       customerName: customerName || 'Client',
+       etaMinutes: 25,
+       timestamp: Date.now()
+    };
+    
+    // Add to Firestore
+    try {
+      await addOrder(newOrderData);
+    } catch (e) {
+      console.error("Firebase err:", e);
+    }
+    
     setTimeout(() => {
-      // CREATE TRACKING ORDER MOCK
-      setActiveOrder({
-         id: 'CMD-' + Math.floor(1000 + Math.random() * 9000),
-         status: 'en_route',
-         total: getCartTotal(),
-         items: [...cart], // clone to keep items
-         orderMode: orderMode,
-         address: address || 'Antananarivo, Centre',
-         customerName: customerName || 'Client',
-         etaMinutes: 25,
-         timestamp: Date.now()
-      });
+      // KEEP LOCAL COPY FOR TRACKING
+      setActiveOrder(newOrderData);
 
       clearCart();
       setIsProcessing(false);
@@ -711,6 +763,8 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                   
                   const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
                   window.open(`${baseUrl}?text=${encodeURIComponent(message)}`, '_blank');
+                  
+                  handleFinalCheckout();
                }}
                className="w-full bg-[#25D366] text-white py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 hover:bg-[#1DA851] transition-all shadow-[0_10px_20px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#188c43] active:border-b-0 active:translate-y-[5px]"
              >
@@ -730,6 +784,9 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
 
 // --- HOME & MENU PAGES COMBINED RENDER (Kept exact franchise vibe) ---
 function PageHome() {
+  const { globalProducts: products, globalCategories: categories, globalConfig } = useCart();
+  const heroProduct = products.length > 0 ? products[0] : null;
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="bg-white pb-12">
       {/* MASSIVE PROMO HERO */}
@@ -739,20 +796,22 @@ function PageHome() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-24 md:py-24 relative z-10 flex flex-col md:flex-row items-center justify-between gap-12 md:gap-16">
            <div className="flex-1 text-center md:text-left z-20">
              <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-[#FFC72C] text-[#DA291C] font-black uppercase tracking-widest px-4 py-1.5 rounded-full text-sm inline-block mb-6 shadow-xl border-2 border-[#FFC72C]/50">Édition Limitée</motion.span>
-             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-black text-6xl md:text-8xl lg:text-[9rem] leading-[0.85] tracking-tighter mb-6 uppercase text-white drop-shadow-2xl">Méga<br/><span className="text-[#FFC72C] filter drop-shadow-md">Gastro.</span></motion.h1>
-             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="font-bold text-lg md:text-2xl text-red-50 mb-8 max-w-lg mx-auto md:mx-0 drop-shadow-sm">Le burger le plus attendu de l'année. Double viande, double fromage fondu. Ça va être énorme.</motion.p>
+             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-black text-6xl md:text-8xl lg:text-[9rem] leading-[0.85] tracking-tighter mb-6 uppercase text-white drop-shadow-2xl">{globalConfig?.heroTitle1 || 'Méga'}<br/><span className="text-[#FFC72C] filter drop-shadow-md">{globalConfig?.heroTitle2 || 'Gastro'}</span></motion.h1>
+             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="font-bold text-lg md:text-2xl text-red-50 mb-8 max-w-lg mx-auto md:mx-0 drop-shadow-sm">{globalConfig?.heroSubtitle || "Le burger le plus attendu de l'année. Double viande, double fromage fondu. Ça va être énorme."}</motion.p>
              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                <Link to="/menu" className="inline-block bg-[#FFC72C] text-[#DA291C] px-8 py-4 rounded-2xl font-black text-xl hover:bg-yellow-400 transition-all shadow-[0_10px_30px_rgba(255,199,44,0.4)] border-b-[6px] border-yellow-600 hover:border-b-[4px] hover:translate-y-[2px] active:border-b-0 active:translate-y-[6px]">Je le veux !</Link>
              </motion.div>
            </div>
-           <div className="flex-1 w-full max-w-md relative z-10">
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[130%] h-[130%] bg-gradient-to-r from-[#FFC72C] to-orange-400 rounded-full blur-[80px] opacity-30 z-0"></div>
-              <motion.img 
-                animate={{ y: [0, -15, 0], rotate: [0, 2, 0] }} 
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                src={PRODUCTS[0].image} alt="Mega Burger" className="w-full relative z-10 filter drop-shadow-2xl scale-110 sm:scale-125 hover:scale-150 transition-transform duration-700 cursor-pointer" 
-              />
-           </div>
+           {heroProduct && (
+             <div className="flex-1 w-full max-w-md relative z-10">
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[130%] h-[130%] bg-gradient-to-r from-[#FFC72C] to-orange-400 rounded-full blur-[80px] opacity-30 z-0"></div>
+                <motion.img 
+                  animate={{ y: [0, -15, 0], rotate: [0, 2, 0] }} 
+                  transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                  src={heroProduct.image} alt="Mega Burger" className="w-full relative z-10 filter drop-shadow-2xl scale-110 sm:scale-125 hover:scale-150 transition-transform duration-700 cursor-pointer" 
+                />
+             </div>
+           )}
         </div>
       </div>
 
@@ -786,10 +845,10 @@ function PageHome() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
            <h2 className="font-black text-2xl sm:text-3xl uppercase tracking-tight text-center mb-6 sm:mb-10 text-gray-900">Tu as envie de quoi ?</h2>
            <div className="flex overflow-x-auto sm:grid sm:grid-cols-6 gap-3 sm:gap-4 pb-4 sm:pb-0 hide-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
-              {CATEGORIES.map(cat => (
-                <Link to="/menu" key={cat.id} className={`${cat.color} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 hover:-translate-y-1 sm:hover:-translate-y-2 transition-transform shadow-sm border border-black/5 min-w-[110px] shrink-0 snap-center`}>
-                   <span className="text-4xl sm:text-5xl drop-shadow-md">{cat.icon}</span>
-                   <span className={`font-black text-[11px] sm:text-sm uppercase text-center ${cat.text} leading-tight`}>{cat.name}</span>
+              {categories.slice(0, 6).map(cat => (
+                <Link to="/menu" key={cat.id} className={`${cat.color || 'bg-gray-100'} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 hover:-translate-y-1 sm:hover:-translate-y-2 transition-transform shadow-sm border border-black/5 min-w-[110px] shrink-0 snap-center`}>
+                   <span className="text-4xl sm:text-5xl drop-shadow-md">{cat.icon || '🍔'}</span>
+                   <span className={`font-black text-[11px] sm:text-sm uppercase text-center ${cat.text || 'text-gray-700'} leading-tight`}>{cat.name}</span>
                 </Link>
               ))}
            </div>
@@ -805,7 +864,7 @@ function PageHome() {
             <Link to="/menu" className="hidden sm:inline-flex items-center gap-1 font-bold text-[#DA291C] hover:text-red-800">Voir tout le menu <ChevronRight className="w-5 h-5"/></Link>
           </div>
           <div className="flex overflow-x-auto gap-4 sm:gap-6 pb-6 hide-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth snap-x snap-mandatory">
-             {PRODUCTS.filter(p => p.popular).map(product => (
+             {products.filter(p => p.popular).slice(0, 6).map(product => (
                 <div key={product.id} className="w-[75vw] max-w-[260px] sm:max-w-none sm:w-[320px] shrink-0 snap-center">
                   <ProductCard product={product} />
                 </div>
@@ -821,28 +880,8 @@ function PageMenu() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // API State
-  const [products, setProducts] = useState<typeof PRODUCTS>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchMenu = () => {
-    setIsLoading(true);
-    setError(null);
-    simulateApiCall(PRODUCTS, 0.4) // 40% fail rate for simulation
-      .then(res => {
-        setProducts(res);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setIsLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    fetchMenu();
-  }, []);
+  const { globalProducts: products, globalCategories: categories } = useCart();
+  const isLoading = products.length === 0 && categories.length === 0;
 
   const filteredProducts = products.filter(p => {
     if (searchQuery.trim() !== '') {
@@ -857,13 +896,20 @@ function PageMenu() {
       <div className="bg-white/90 backdrop-blur-xl sticky top-[68px] sm:top-[85px] z-30 shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex overflow-x-auto hide-scrollbar gap-3 py-4">
-            {CATEGORIES.map(cat => (
+            <button 
+              onClick={() => { setActiveCategory('all'); setSearchQuery(''); }} 
+              className={`flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none border-2 shrink-0 ${activeCategory === 'all' && !searchQuery ? 'bg-[#FFC72C] border-yellow-400 text-gray-900 shadow-md transform scale-105' : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:border-gray-200'}`}
+            >
+              <span className="text-3xl filter drop-shadow-sm">🍽️</span>
+              <span className="font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">Tous</span>
+            </button>
+            {categories.map((cat: any) => (
                 <button 
                   key={cat.id} 
                   onClick={() => { setActiveCategory(cat.id); setSearchQuery(''); }} 
                   className={`flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none border-2 shrink-0 ${activeCategory === cat.id && !searchQuery ? 'bg-[#FFC72C] border-yellow-400 text-gray-900 shadow-md transform scale-105' : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:border-gray-200'}`}
                 >
-                  <span className="text-3xl filter drop-shadow-sm">{cat.icon}</span>
+                  <span className="text-3xl filter drop-shadow-sm">{cat.icon || '🍔'}</span>
                   <span className="font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">{cat.name}</span>
                 </button>
             ))}
@@ -1356,7 +1402,15 @@ function MapAutoUpdater({ storePos, destPos }: { storePos: [number, number], des
   const mapInstance = useMap();
   useEffect(() => {
     if (mapInstance && storePos && destPos) {
-       mapInstance.fitBounds([storePos, destPos], { padding: [50, 50], maxZoom: 16 });
+       // Timeout ensures map is fully rendered before calculating bounds
+       setTimeout(() => {
+         mapInstance.invalidateSize();
+         if (storePos[0] !== destPos[0] || storePos[1] !== destPos[1]) {
+           mapInstance.fitBounds([storePos, destPos], { padding: [50, 50], maxZoom: 16 });
+         } else {
+           mapInstance.setView(storePos, 15);
+         }
+       }, 500);
     }
   }, [storePos, destPos, mapInstance]);
   return null;

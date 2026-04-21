@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -- PRIMITIVES --
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // -- CONFIG --
+    function isValidConfig(data) {
+      return data.keys().hasOnly(['brandName', 'heroTitle1', 'heroTitle2', 'heroSubtitle', 'whatsappNumber', 'deliveryFee']) &&
+             (!data.keys().hasAny(['brandName']) || (data.brandName is string && data.brandName.size() <= 100)) &&
+             (!data.keys().hasAny(['whatsappNumber']) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 20));
+    }
+    match /config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidConfig(incoming()) && incoming().keys().hasAll(['brandName', 'whatsappNumber']);
+      allow update: if isAdmin() && isValidConfig(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- CATEGORIES --
+    function isValidCategory(data) {
+      return data.keys().hasOnly(['name', 'icon', 'color', 'textColor', 'orderId']) &&
+             (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 100));
+    }
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidCategory(incoming()) && incoming().keys().hasAll(['name']);
+      allow update: if isAdmin() && isValidCategory(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- PRODUCTS --
+    function isValidProduct(data) {
+      return data.keys().hasOnly(['name', 'description', 'price', 'oldPrice', 'image', 'badge', 'categoryId', 'popular']) &&
+             (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 150)) &&
+             (!data.keys().hasAny(['price']) || (data.price is number)) &&
+             (!data.keys().hasAny(['image']) || (data.image is string && data.image.size() <= 500));
+    }
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidProduct(incoming()) && incoming().keys().hasAll(['name', 'price', 'image']);
+      allow update: if isAdmin() && isValidProduct(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- ORDERS --
+    function isValidOrder(data) {
+      // items array is tricky. we only enforce basic shape
+      return data.keys().hasOnly(['userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'createdAt', 'etaMinutes']) &&
+             (!data.keys().hasAny(['userId']) || (data.userId is string && data.userId.size() <= 128)) &&
+             (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
+             (!data.keys().hasAny(['total']) || (data.total is number)) &&
+             (!data.keys().hasAny(['status']) || (data.status is string && data.status.matches('^(pending|accepted|delivering|completed|canceled)$'))) &&
+             (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100));
+    }
+    match /orders/{orderId} {
+      // users can get their own orders, or admin
+      allow get: if isValidId(orderId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() && isValidOrder(incoming()) && incoming().keys().hasAll(['userId', 'customerName', 'total', 'status']) && incoming().userId == request.auth.uid && incoming().status == 'pending';
+      
+      allow update: if isSignedIn() && isValidOrder(incoming()) && incoming().userId == existing().userId && (
+        isAdmin() || 
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status']) && existing().userId == request.auth.uid && incoming().status == 'canceled' && existing().status == 'pending') // Only user can cancel if pending
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // -- ADMINS --
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // No one can create/update admins from client side for security (must be done in Firebase console)
+      allow list, create, update, delete: if false; 
+    }
+  }
+}
