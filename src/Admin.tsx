@@ -425,23 +425,28 @@ function AdminLogin() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
+    // Normalize email just in case
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
       if (isRegistering) {
-         await createUserWithEmailAndPassword(auth, email, password);
+         await createUserWithEmailAndPassword(auth, normalizedEmail, password);
       } else {
-         await signInWithEmailAndPassword(auth, email, password);
+         await signInWithEmailAndPassword(auth, normalizedEmail, password);
       }
     } catch (err: any) {
+      console.error(err);
       if (err.code === 'auth/invalid-credential') {
          setError('Email ou mot de passe incorrect.');
       } else if (err.code === 'auth/too-many-requests') {
          setError('Trop de tentatives. Veuillez réessayer plus tard.');
       } else if (err.code === 'auth/email-already-in-use') {
-         setError('Un compte existe déjà avec cette adresse e-mail.');
+         setError('Un compte existe déjà avec cette adresse e-mail. Cliquez sur "me connecter".');
       } else if (err.code === 'auth/weak-password') {
          setError('Le mot de passe doit comporter au moins 6 caractères.');
       } else {
-         setError('Erreur de connexion. Vérifiez vos identifiants.');
+         setError(`Erreur: ${err.code || err.message}`);
       }
     }
     setLoading(false);
