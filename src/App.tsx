@@ -240,9 +240,24 @@ export default function App() {
 
 // --- LAYOUT : FRANCHISE HEADER ---
 function Layout({ children }: { children: React.ReactNode }) {
-  const { getCartCount, getCartTotal, selectedProduct, setSelectedProduct, setIsCartOpen, isCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, cart, activeOrder } = useCart();
+  const { getCartCount, getCartTotal, selectedProduct, setSelectedProduct, setIsCartOpen, isCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, cart, activeOrder, globalConfig } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    if (globalConfig?.seoTitle) {
+      document.title = globalConfig.seoTitle;
+    }
+    if (globalConfig?.seoDesc) {
+      let meta = document.querySelector('meta[name="description"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'description');
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', globalConfig.seoDesc);
+    }
+  }, [globalConfig]);
 
   const handleCountrySwitch = () => {
     // Basic confirmation since switching country might imply different prices
@@ -547,7 +562,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 // --- NEW COMPONENT: CART DRAWER (STEP 2 - VALIDATION) ---
 function CartDrawer({ onClose }: { onClose: () => void }) {
-  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber } = useCart();
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber, globalConfig } = useCart();
   const navigate = useNavigate();
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('emporter');
   const [customerName, setCustomerName] = useState('');
@@ -736,7 +751,9 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
              </div>
              
              <button 
+               disabled={globalConfig?.isRestaurantOpen === false}
                onClick={() => {
+                  if (globalConfig?.isRestaurantOpen === false) return;
                   if (!customerName.trim()) {
                     alert("Veuillez saisir votre pseudo/nom pour la commande.");
                     return;
@@ -758,7 +775,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                   });
                   
                   message += `\n*--- RÉCAPITULATIF ---*\n`;
-                  message += `*Total à payer :* *${formatPriceC(getCartTotal())}*\n\n`;
+                  message += `*Total à payer :* *${formatPriceC(getCartTotal() + (orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0))}*\n\n`;
                   message += `Merci de valider ma commande ! 👍`;
                   
                   const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
@@ -766,15 +783,24 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                   
                   handleFinalCheckout();
                }}
-               className="w-full bg-[#25D366] text-white py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 hover:bg-[#1DA851] transition-all shadow-[0_10px_20px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#188c43] active:border-b-0 active:translate-y-[5px]"
+               className={`w-full py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 transition-all ${globalConfig?.isRestaurantOpen === false ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-[#25D366] text-white hover:bg-[#1DA851] shadow-[0_10px_20px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#188c43] active:border-b-0 active:translate-y-[5px]'}`}
              >
-                <MessageCircle className="w-6 h-6 border-2 border-white rounded-full p-0.5" />
-                Commander sur WhatsApp
+                {globalConfig?.isRestaurantOpen === false ? (
+                  <>Le Restaurant est Fermé</>
+                ) : (
+                  <><MessageCircle className="w-6 h-6 border-2 border-white rounded-full p-0.5" /> Commander sur WhatsApp</>
+                )}
              </button>
              
-             <p className="text-center text-xs font-bold text-gray-400 mt-4 leading-tight">
-               Vous finaliserez le paiement et le suivi de commande de manière sécurisée en direct via WhatsApp.
-             </p>
+             {globalConfig?.isRestaurantOpen === false ? (
+               <p className="text-center text-xs font-bold text-red-500 mt-4 leading-tight">
+                 Le service de commande en ligne est momentanément suspendu.
+               </p>
+             ) : (
+               <p className="text-center text-xs font-bold text-gray-400 mt-4 leading-tight">
+                 Vous finaliserez le paiement et le suivi de commande de manière sécurisée en direct via WhatsApp.
+               </p>
+             )}
           </div>
         )}
       </motion.div>
@@ -783,12 +809,28 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
 }
 
 // --- HOME & MENU PAGES COMBINED RENDER (Kept exact franchise vibe) ---
+function PromoBanner({ globalConfig }: { globalConfig: any }) {
+   if (!globalConfig?.promoActive || !globalConfig?.promoText) return null;
+   return (
+      <div className="bg-[#FFC72C] text-gray-900 font-black uppercase tracking-widest text-xs sm:text-sm py-3 px-4 text-center shadow-md relative z-50 overflow-hidden">
+         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagonal-stripes.png')] opacity-10"></div>
+         <span className="relative z-10 flex items-center justify-center gap-2">
+            <Star className="w-4 h-4 fill-current"/>
+            {globalConfig.promoText}
+            <Star className="w-4 h-4 fill-current"/>
+         </span>
+      </div>
+   );
+}
+
 function PageHome() {
   const { globalProducts: products, globalCategories: categories, globalConfig } = useCart();
   const heroProduct = products.length > 0 ? products[0] : null;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="bg-white pb-12">
+      <PromoBanner globalConfig={globalConfig} />
+      
       {/* MASSIVE PROMO HERO */}
       <div className="bg-gradient-to-br from-[#DA291C] to-[#99140d] text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
@@ -883,7 +925,7 @@ function PageMenu() {
   const { globalProducts: products, globalCategories: categories } = useCart();
   const isLoading = products.length === 0 && categories.length === 0;
 
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = products.filter((p: any) => p.isAvailable !== false).filter((p: any) => {
     if (searchQuery.trim() !== '') {
       return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase());
     }
@@ -894,6 +936,8 @@ function PageMenu() {
   return (
     <div className="bg-gray-50 min-h-screen pb-32">
       <div className="bg-white/90 backdrop-blur-xl sticky top-[68px] sm:top-[85px] z-30 shadow-sm border-b border-gray-200">
+        {/* Make PromoBanner sit above the category tabs in menu */}
+        <PromoBanner globalConfig={categories.length > 0 ? useCart().globalConfig : null} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex overflow-x-auto hide-scrollbar gap-3 py-4">
             <button 
@@ -941,8 +985,6 @@ function PageMenu() {
             <div className="w-12 h-12 border-8 border-gray-100 border-t-[#DA291C] rounded-full animate-spin mb-4"></div>
             <p className="font-bold text-gray-500 uppercase tracking-widest text-sm">Chargement du Menu...</p>
           </div>
-        ) : error ? (
-          <ApiErrorState message={error} onRetry={fetchMenu} />
         ) : filteredProducts.length === 0 ? (
            <div className="py-20 text-center">
              <span className="text-6xl mb-4 block">🥺</span>
@@ -1398,21 +1440,23 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
 };
 
 // --- TRACKING PAGE REAL-TIME GPS COMPONENT ---
-function MapAutoUpdater({ storePos, destPos }: { storePos: [number, number], destPos: [number, number] }) {
+function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [number, number], destPos: [number, number], routeCoords?: [number, number][] }) {
   const mapInstance = useMap();
   useEffect(() => {
     if (mapInstance && storePos && destPos) {
        // Timeout ensures map is fully rendered before calculating bounds
        setTimeout(() => {
          mapInstance.invalidateSize();
-         if (storePos[0] !== destPos[0] || storePos[1] !== destPos[1]) {
+         if (routeCoords.length > 0) {
+           mapInstance.fitBounds(routeCoords, { padding: [50, 50], maxZoom: 16 });
+         } else if (storePos[0] !== destPos[0] || storePos[1] !== destPos[1]) {
            mapInstance.fitBounds([storePos, destPos], { padding: [50, 50], maxZoom: 16 });
          } else {
            mapInstance.setView(storePos, 15);
          }
        }, 500);
     }
-  }, [storePos, destPos, mapInstance]);
+  }, [storePos, destPos, routeCoords, mapInstance]);
   return null;
 }
 
@@ -1426,6 +1470,21 @@ function PageTracking() {
   const [pos, setPos] = useState<[number, number]>(storePos);
   const [isLiveGPS, setIsLiveGPS] = useState(false);
   const [dynamicEta, setDynamicEta] = useState<number>(activeOrder?.etaMinutes || 0);
+  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
+
+  // FETCH REAL ROUTE FROM OPENSTREETMAP (OSRM)
+  useEffect(() => {
+    if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
+    fetch(`https://router.project-osrm.org/route/v1/driving/${storePos[1]},${storePos[0]};${destPos[1]},${destPos[0]}?overview=full&geometries=geojson`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.routes && data.routes[0]) {
+           const coords = data.routes[0].geometry.coordinates.map((c: any) => [c[1], c[0]]);
+           setRouteCoords(coords);
+        }
+      })
+      .catch(err => console.error("OSRM fetch error", err));
+  }, [activeOrder, storePos[0], storePos[1], destPos[0], destPos[1]]);
 
   // DYNAMIC ETA CALCULATION
   useEffect(() => {
@@ -1439,15 +1498,13 @@ function PageTracking() {
      }
   }, [pos, destPos, activeOrder]);
 
-  // REAL-TIME GPS SIMULATOR (Replaced User API)
-  // We use a robust server-like simulation because accessing the user's navigator.geolocation 
-  // mistakenly tracks the *customer's* phone instead of the *driver's* motorbike.
+  // REAL-TIME GPS SIMULATOR ALONG ROADS
   useEffect(() => {
     if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
 
     let isSubscribed = true;
-    setIsLiveGPS(true); // Treat our realistic simulation as the "live" feed for UI purposes
-    let t = 0;
+    setIsLiveGPS(true); 
+    let t = 0; // Progress from 0 to 1
     
     // Animate smoothly over 2 minutes (120 seconds = 120 updates at 1s each)
     const totalSteps = 120;
@@ -1457,23 +1514,40 @@ function PageTracking() {
       t += progressPerStep;
       if (t > 1) t = 1;
       
-      // Add slight jitter to simulate real road movement
-      const jitterLat = (Math.random() - 0.5) * 0.0002;
-      const jitterLng = (Math.random() - 0.5) * 0.0002;
+      if (isSubscribed) {
+        if (routeCoords.length > 0) {
+           // Interpolate along actual roads
+           const exactFloatIndex = t * (routeCoords.length - 1);
+           const i = Math.floor(exactFloatIndex);
+           const fraction = exactFloatIndex - i;
+           if (i >= routeCoords.length - 1) {
+              setPos(routeCoords[routeCoords.length - 1]);
+           } else {
+              const p1 = routeCoords[i];
+              const p2 = routeCoords[i+1];
+              setPos([
+                  p1[0] + (p2[0] - p1[0]) * fraction,
+                  p1[1] + (p2[1] - p1[1]) * fraction
+              ]);
+           }
+        } else {
+           // Fallback to strict linear if route failed to load
+           const jitterLat = (Math.random() - 0.5) * 0.0002;
+           const jitterLng = (Math.random() - 0.5) * 0.0002;
+           const lat = storePos[0] + (destPos[0] - storePos[0]) * t + (t < 1 ? jitterLat : 0);
+           const lng = storePos[1] + (destPos[1] - storePos[1]) * t + (t < 1 ? jitterLng : 0);
+           setPos([lat, lng]);
+        }
+      }
       
-      // Calculate interpolation
-      const lat = storePos[0] + (destPos[0] - storePos[0]) * t + (t < 1 ? jitterLat : 0);
-      const lng = storePos[1] + (destPos[1] - storePos[1]) * t + (t < 1 ? jitterLng : 0);
-      
-      if (isSubscribed) setPos([lat, lng]);
       if (t >= 1) clearInterval(interval);
-    }, 1000); // 1 update per second for smooth map tracking
+    }, 1000); 
 
     return () => {
       isSubscribed = false;
       clearInterval(interval);
     };
-  }, [activeOrder]);
+  }, [activeOrder, routeCoords]); // Re-run if we get road coordinates
 
   const sendToWhatsApp = () => {
     if (!activeOrder) return;
@@ -1604,9 +1678,9 @@ function PageTracking() {
                 <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
                 <Marker position={storePos} icon={storeIcon}><Popup>Restaurant La Gastronomie</Popup></Marker>
                 <Marker position={destPos} icon={homeIcon}><Popup>Adresse de Livraison</Popup></Marker>
-                <Polyline positions={[storePos, destPos]} pathOptions={{ color: '#DA291C', weight: 4, dashArray: '8, 8' }} />
+                <Polyline positions={routeCoords.length > 0 ? routeCoords : [storePos, destPos]} pathOptions={{ color: '#DA291C', weight: 4, dashArray: routeCoords.length > 0 ? undefined : '8, 8' }} />
                 <Marker position={pos} icon={bikeIcon}><Popup>Votre livreur est en route !</Popup></Marker>
-                <MapAutoUpdater storePos={storePos} destPos={destPos} />
+                <MapAutoUpdater storePos={storePos} destPos={destPos} routeCoords={routeCoords} />
               </MapContainer>
               
               {/* Overlay Driver Info */}

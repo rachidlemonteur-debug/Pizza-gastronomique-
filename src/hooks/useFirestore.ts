@@ -18,16 +18,28 @@ export function useFirestore(colName: string, orderField: string = 'name') {
     return () => unsubscribe();
   }, [colName, orderField]);
 
+  const handleCall = async (cb: Function) => {
+    try {
+      await cb();
+    } catch (err: any) {
+      if (err.message?.includes('permission')) {
+        alert("Action refusée : Votre rôle ne vous permet pas d'effectuer cette opération.");
+      } else {
+        console.error(err);
+      }
+    }
+  }
+
   const add = async (item: any) => {
-    await addDoc(collection(db, colName), item);
+    await handleCall(() => addDoc(collection(db, colName), item));
   };
 
   const update = async (id: string, item: any) => {
-    await updateDoc(doc(db, colName, id), item);
+    await handleCall(() => updateDoc(doc(db, colName, id), item));
   };
 
   const remove = async (id: string) => {
-    await deleteDoc(doc(db, colName, id));
+    await handleCall(() => deleteDoc(doc(db, colName, id)));
   };
 
   return { data, loading, add, update, remove };
