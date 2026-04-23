@@ -437,7 +437,9 @@ function AdminLogin() {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential') {
+      if (err.code === 'auth/unauthorized-domain') {
+         setError('Domaine non autorisé. Ajoutez votre domaine Vercel dans Firebase Console > Authentication > Settings > Authorized domains.');
+      } else if (err.code === 'auth/invalid-credential') {
          setError('Email ou mot de passe incorrect.');
       } else if (err.code === 'auth/too-many-requests') {
          setError('Trop de tentatives. Veuillez réessayer plus tard.');
