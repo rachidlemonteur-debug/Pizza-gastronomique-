@@ -6,7 +6,7 @@ import {
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
   Download, UploadCloud, ShieldAlert
 } from 'lucide-react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { useFirestore } from './hooks/useFirestore';
@@ -419,18 +419,27 @@ function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      if (isRegistering) {
+         await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+         await signInWithEmailAndPassword(auth, email, password);
+      }
     } catch (err: any) {
       if (err.code === 'auth/invalid-credential') {
          setError('Email ou mot de passe incorrect.');
       } else if (err.code === 'auth/too-many-requests') {
          setError('Trop de tentatives. Veuillez réessayer plus tard.');
+      } else if (err.code === 'auth/email-already-in-use') {
+         setError('Un compte existe déjà avec cette adresse e-mail.');
+      } else if (err.code === 'auth/weak-password') {
+         setError('Le mot de passe doit comporter au moins 6 caractères.');
       } else {
          setError('Erreur de connexion. Vérifiez vos identifiants.');
       }
@@ -444,24 +453,36 @@ function AdminLogin() {
         <div className="w-16 h-16 bg-[#FFC72C] rounded-2xl flex items-center justify-center mb-6 mx-auto shadow-inner border-[3px] border-white ring-4 ring-yellow-50">
            <Lock className="w-8 h-8 text-[#DA291C]" />
         </div>
-        <h1 className="text-2xl font-black text-center uppercase tracking-tight text-gray-900 mb-2">Accès Sécurisé</h1>
+        <h1 className="text-2xl font-black text-center uppercase tracking-tight text-gray-900 mb-2">
+           {isRegistering ? 'Créer un accès' : 'Accès Sécurisé'}
+        </h1>
         <p className="text-center text-gray-500 font-bold text-sm mb-8">Espace réservé à l'administration du site</p>
         
         {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold mb-6 text-center">{error}</div>}
         
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleAuth} className="space-y-4">
           <div>
             <label className="block text-xs font-black uppercase text-gray-500 mb-2">Adresse Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-[#DA291C] focus:ring-2 focus:ring-red-100 font-bold transition-all" required />
           </div>
           <div>
             <label className="block text-xs font-black uppercase text-gray-500 mb-2">Mot de Passe</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-[#DA291C] focus:ring-2 focus:ring-red-100 font-bold transition-all" required />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={6} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-[#DA291C] focus:ring-2 focus:ring-red-100 font-bold transition-all" required />
           </div>
           <button disabled={loading} type="submit" className="w-full bg-[#DA291C] text-white py-3.5 rounded-xl font-black uppercase tracking-wider shadow-[0_10px_20px_rgba(218,41,28,0.3)] hover:bg-red-700 transition-colors mt-2 disabled:opacity-50 hover:-translate-y-0.5 active:translate-y-1">
-            {loading ? 'Connexion...' : 'Se connecter'}
+            {loading ? 'Traitement...' : (isRegistering ? 'S\'inscrire' : 'Se connecter')}
           </button>
         </form>
+        
+        <div className="mt-6 text-center">
+          <button 
+             type="button" 
+             onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
+             className="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-2"
+          >
+             {isRegistering ? 'J\'ai déjà un compte, me connecter' : 'Nouveau membre du staff ? Créer un compte'}
+          </button>
+        </div>
       </div>
     </div>
   );
