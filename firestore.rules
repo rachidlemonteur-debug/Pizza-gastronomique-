@@ -104,5 +104,39 @@ service cloud.firestore {
       
       allow delete: if isAdmin();
     }
+
+    // -- POINTS OF SALE --
+    function isValidPOS(data) {
+      return data.keys().hasOnly(['name', 'address', 'lat', 'lng', 'phone', 'hours', 'priority', 'isOpen', 'district']) &&
+             data.name is string && data.lat is number && data.lng is number;
+    }
+    match /points_of_sale/{posId} {
+      allow get: if isValidId(posId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidPOS(incoming());
+      allow update: if isEditor() && isValidPOS(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- REVIEWS --
+    function isValidReview(data) {
+      return data.keys().hasOnly(['customerName', 'rating', 'comment', 'isApproved', 'createdAt']) &&
+             data.customerName is string && data.rating is number;
+    }
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if true; // Public can see approved ones, admin sees all
+      allow create: if isValidReview(incoming());
+      allow update: if isEditor() && isValidReview(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- ACTIVITY LOGS --
+    match /activity_logs/{logId} {
+      allow get: if isSuperAdmin();
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn(); // Log any admin action
+      allow update, delete: if false; // Logs are immutable
+    }
   }
 }

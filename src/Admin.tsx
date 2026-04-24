@@ -4,12 +4,29 @@ import {
   BarChart, Settings, ShoppingBag, List, Users, 
   LogOut, Plus, Trash2, Edit, Save, X, Eye, 
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
-  Download, UploadCloud, ShieldAlert
+  Download, UploadCloud, ShieldAlert, Star
 } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { useFirestore } from './hooks/useFirestore';
+
+// Activity Logger Utility
+const logActivity = async (action: string, details: string) => {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await addDoc(collection(db, 'activity_logs'), {
+      userId: user.uid,
+      userName: user.email,
+      action,
+      details,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error("Logging failed", e);
+  }
+};
 
 export default function AdminApp() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -66,8 +83,11 @@ export default function AdminApp() {
     { name: 'Commandes', path: '/admin/orders', icon: <ShoppingBag className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
+    { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
+    { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Configuration', path: '/admin/config', icon: <Settings className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
     { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, allow: ['super_admin'] },
+    { name: 'Logs d\'Activité', path: '/admin/logs', icon: <Lock className="w-5 h-5"/>, allow: ['super_admin'] },
   ].filter(item => item.allow.includes(role || 'viewer'));
 
   return (
@@ -131,8 +151,11 @@ export default function AdminApp() {
              <Route path="/orders" element={<AdminOrders role={role} />} />
              <Route path="/products" element={<AdminProducts role={role} />} />
              <Route path="/categories" element={<AdminCategories role={role} />} />
+             <Route path="/pos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPOS role={role} /> : <NoAccess />} />
+             <Route path="/reviews" element={<AdminReviews role={role} />} />
              <Route path="/config" element={['super_admin', 'admin'].includes(role!) ? <AdminConfig role={role} /> : <NoAccess />} />
              <Route path="/users" element={role === 'super_admin' ? <AdminUsers /> : <NoAccess />} />
+             <Route path="/logs" element={role === 'super_admin' ? <AdminLogs /> : <NoAccess />} />
            </Routes>
         </main>
       </div>
@@ -244,7 +267,7 @@ function AdminProducts({ role }: { role: string | null }) {
                   {canEdit && (
                   <td className="px-6 py-4 text-right">
                     <button onClick={() => handleEdit(p)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg mr-2 font-bold text-sm transition-colors">Modifier</button>
-                    <button onClick={() => remove(p.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                    <button onClick={() => { logActivity('SUPPRESSION_PRODUIT', p.name); remove(p.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                   </td>
                   )}
                 </tr>
@@ -264,21 +287,21 @@ function AdminProducts({ role }: { role: string | null }) {
               </h3>
               <form onSubmit={async (e: any) => {
                 e.preventDefault();
-                await (editingItem ? update(editingItem.id, {
+                const prodData = {
                   name: e.target.name.value,
                   price: Number(e.target.price.value),
                   image: imageBase64 || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
                   description: e.target.description.value,
                   categoryId: e.target.category.value,
                   popular: e.target.popular.checked
-                }) : add({
-                  name: e.target.name.value,
-                  price: Number(e.target.price.value),
-                  image: imageBase64 || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
-                  description: e.target.description.value,
-                  categoryId: e.target.category.value,
-                  popular: e.target.popular?.checked || false
-                }));
+                };
+                if (editingItem) {
+                  await update(editingItem.id, prodData);
+                  logActivity('MODIFICATION_PRODUIT', prodData.name);
+                } else {
+                  await add(prodData);
+                  logActivity('AJOUT_PRODUIT', prodData.name);
+                }
                 setShowModal(false);
                 setEditingItem(null);
                 setImageBase64('');
@@ -447,6 +470,8 @@ function AdminLogin() {
          setError('Un compte existe déjà avec cette adresse e-mail. Cliquez sur "me connecter".');
       } else if (err.code === 'auth/weak-password') {
          setError('Le mot de passe doit comporter au moins 6 caractères.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+         setError('La connexion par email/mot de passe n’est pas activée dans votre console Firebase (Authentication > Sign-in method).');
       } else {
          setError(`Erreur: ${err.code || err.message}`);
       }
@@ -475,9 +500,9 @@ function AdminLogin() {
            <Lock className="w-8 h-8 text-[#DA291C]" />
         </div>
         <h1 className="text-2xl font-black text-center uppercase tracking-tight text-gray-900 mb-2">
-           Accès Sécurisé
+           {isRegistering ? 'Créer un accès' : 'Accès Sécurisé'}
         </h1>
-        <p className="text-center text-gray-500 font-bold text-sm mb-6">Connectez-vous pour administrer le menu et les commandes.</p>
+        <p className="text-center text-gray-500 font-bold text-sm mb-6"> {isRegistering ? 'Inscrivez-vous pour accéder au dashboard.' : 'Connectez-vous pour administrer le menu.'}</p>
         
         {error && (
           <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold mb-6 text-center border border-red-100 flex flex-col gap-2">
@@ -485,11 +510,56 @@ function AdminLogin() {
           </div>
         )}
         
-        <div className="space-y-4">
+        <form onSubmit={handleAuth} className="space-y-4">
+          <div>
+            <label className="block text-xs font-black uppercase text-gray-500 mb-2">Adresse Email</label>
+            <input 
+              type="email" 
+              value={email} 
+              onChange={e => setEmail(e.target.value)} 
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-[#DA291C] focus:ring-2 focus:ring-red-100 font-bold transition-all" 
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-black uppercase text-gray-500 mb-2">Mot de Passe</label>
+            <input 
+              type="password" 
+              value={password} 
+              onChange={e => setPassword(e.target.value)} 
+              minLength={6}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 outline-none focus:border-[#DA291C] focus:ring-2 focus:ring-red-100 font-bold transition-all" 
+              required 
+            />
+          </div>
+          <button 
+            disabled={loading} 
+            type="submit" 
+            className="w-full bg-[#DA291C] text-white py-3.5 rounded-xl font-black uppercase tracking-wider shadow-[0_10px_20px_rgba(218,41,28,0.3)] hover:bg-red-700 transition-colors mt-2 disabled:opacity-50 hover:-translate-y-0.5 active:translate-y-1"
+          >
+            {loading ? 'Traitement...' : (isRegistering ? 'S\'inscrire' : 'Se connecter')}
+          </button>
+        </form>
+
+        <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+          <button 
+            onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
+            className="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-4"
+          >
+            {isRegistering ? 'Déjà un compte ? Se connecter' : 'Nouveau membre ? Créer un accès'}
+          </button>
+        </div>
+
+        <div className="mt-10 text-center">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex-1 h-px bg-gray-200"></div>
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ou continuer avec</span>
+            <div className="flex-1 h-px bg-gray-200"></div>
+          </div>
           <button 
              onClick={handleGoogleAuth} 
              disabled={loading} 
-             className="w-full bg-white border-2 border-gray-200 text-gray-700 py-3.5 px-4 rounded-xl font-black flex items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50"
+             className="w-full bg-white border-2 border-gray-200 text-gray-700 py-3 px-4 rounded-xl font-black flex items-center justify-center gap-3 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 text-sm"
           >
              <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -497,14 +567,8 @@ function AdminLogin() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
              </svg>
-             {loading ? 'Connexion en cours...' : 'Continuer avec Google'}
+             Google
           </button>
-        </div>
-        
-        <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-400 font-bold">
-            Votre compte Google (Gmail) personnel doit être autorisé au préalable pour accéder à l'interface d'administration.
-          </p>
         </div>
       </div>
     </div>
@@ -802,7 +866,7 @@ function AdminUsers() {
                     <select 
                       className="bg-gray-100 border-none font-bold text-sm rounded-lg px-3 py-1 cursor-pointer focus:ring-2 focus:ring-[#FFC72C] outline-none"
                       value={u.role || 'viewer'}
-                      onChange={(e) => update(u.id, { role: e.target.value })}
+                      onChange={(e) => { logActivity('MODIF_ROLE', `${u.email} -> ${e.target.value}`); update(u.id, { role: e.target.value }); }}
                       disabled={u.email === 'beidoufadimatou1998@gmail.com'}
                     >
                       <option value="viewer">Spectateur</option>
@@ -813,7 +877,7 @@ function AdminUsers() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button 
-                       onClick={() => { if(window.confirm('Voulez-vous révoquer l\'accès de cet utilisateur ?')) remove(u.id); }} 
+                       onClick={() => { if(window.confirm('Voulez-vous révoquer l\'accès de cet utilisateur ?')) { logActivity('REVOQUER_ACCES', u.email); remove(u.id); } }} 
                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors  disabled:opacity-50"
                        disabled={u.email === 'beidoufadimatou1998@gmail.com'}
                     >
@@ -826,6 +890,163 @@ function AdminUsers() {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminPOS({ role }: { role: string | null }) {
+  const { data: posList, loading, add, remove, update } = useFirestore('points_of_sale', 'name');
+  const [showModal, setShowModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="font-black text-2xl text-gray-900">Points de Vente</h2>
+        {canEdit && (
+        <button onClick={() => { setEditingItem(null); setShowModal(true); }} className="bg-[#DA291C] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+          <Plus className="w-4 h-4"/> Nouveau Site
+        </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {posList.map((p: any) => (
+          <div key={p.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden">
+             <div className={`absolute top-0 right-0 px-4 py-1 font-black text-[10px] uppercase ${p.isOpen !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {p.isOpen !== false ? 'Ouvert' : 'Fermé'}
+             </div>
+             <h3 className="font-black text-lg mb-1">{p.name}</h3>
+             <p className="text-sm font-bold text-gray-500 mb-4">{p.address}</p>
+             <div className="flex gap-4 text-xs font-bold text-gray-400 mb-6">
+                <span>📍 Lat: {p.lat}</span>
+                <span>📍 Lng: {p.lng}</span>
+             </div>
+             {canEdit && (
+               <div className="flex gap-2">
+                  <button onClick={() => { setEditingItem(p); setShowModal(true); }} className="px-4 py-2 bg-gray-100 rounded-lg font-black text-xs hover:bg-gray-200 transition-colors uppercase">Modifier</button>
+                  <button onClick={() => { logActivity('SUPPR_POS', p.name); remove(p.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4"/></button>
+               </div>
+             )}
+          </div>
+        ))}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+           <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
+              <h3 className="font-black text-2xl mb-6">{editingItem ? 'Modifier Site' : 'Nouveau Site'}</h3>
+              <form onSubmit={async (e: any) => {
+                e.preventDefault();
+                const posData = {
+                  name: e.target.name.value,
+                  address: e.target.address.value,
+                  lat: Number(e.target.lat.value),
+                  lng: Number(e.target.lng.value),
+                  phone: e.target.phone.value,
+                  isOpen: e.target.isOpen.checked,
+                  priority: Number(e.target.priority.value || 0)
+                };
+                if (editingItem) {
+                  await update(editingItem.id, posData);
+                  logActivity('MODIF_POS', posData.name);
+                } else {
+                  await add(posData);
+                  logActivity('AJOUT_POS', posData.name);
+                }
+                setShowModal(false);
+              }} className="space-y-4">
+                 <div>
+                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Nom du point de vente</label>
+                   <input name="name" defaultValue={editingItem?.name} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
+                 </div>
+                 <div>
+                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Adresse</label>
+                   <input name="address" defaultValue={editingItem?.address} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Latitude</label>
+                      <input name="lat" type="number" step="any" defaultValue={editingItem?.lat} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Longitude</label>
+                      <input name="lng" type="number" step="any" defaultValue={editingItem?.lng} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border">
+                    <input type="checkbox" name="isOpen" id="isOpen" defaultChecked={editingItem?.isOpen !== false} className="w-5 h-5 rounded" />
+                    <label htmlFor="isOpen" className="font-black text-sm">Site Actif / Ouvert</label>
+                 </div>
+                 <input type="hidden" name="phone" defaultValue="" />
+                 <input type="hidden" name="priority" defaultValue="0" />
+                 <button type="submit" className="w-full bg-[#DA291C] text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg">Enregistrer</button>
+              </form>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminReviews({ role }: { role: string | null }) {
+  const { data: reviews, loading, update, remove } = useFirestore('reviews', 'createdAt');
+  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+
+  return (
+    <div className="space-y-6">
+      <h2 className="font-black text-2xl text-gray-900 border-b pb-4">Avis Clients</h2>
+      <div className="grid gap-4">
+         {reviews.map((r: any) => (
+           <div key={r.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                 <div className="flex items-center gap-2 mb-1">
+                    <span className="font-black text-gray-900">{r.customerName}</span>
+                    <div className="flex text-yellow-500">
+                       {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < r.rating ? 'fill-current' : 'text-gray-300'}`} />)}
+                    </div>
+                 </div>
+                 <p className="text-sm font-bold text-gray-600">{r.comment}</p>
+                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2 block">{new Date(r.createdAt).toLocaleDateString()}</span>
+              </div>
+              {canEdit && (
+                <div className="flex gap-2">
+                   <button 
+                     onClick={() => update(r.id, { isApproved: !r.isApproved })}
+                     className={`px-4 py-2 rounded-lg font-black text-xs uppercase transition-all ${r.isApproved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-green-50'}`}
+                   >
+                     {r.isApproved ? '✅ Approuvé' : 'Approuver'}
+                   </button>
+                   <button onClick={() => { logActivity('SUPPR_AVIS', r.customerName); remove(r.id); }} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                </div>
+              )}
+           </div>
+         ))}
+         {reviews.length === 0 && <p className="text-gray-500 font-bold p-12 text-center bg-gray-50 border-2 border-dashed rounded-3xl">Aucun avis client pour le moment.</p>}
+      </div>
+    </div>
+  );
+}
+
+function AdminLogs() {
+  const { data: logs, loading } = useFirestore('activity_logs', 'timestamp');
+
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+      <h2 className="font-black text-2xl mb-6 text-gray-900 border-b pb-4">Journal d'Activité</h2>
+      <div className="space-y-2">
+         {logs.map((log: any) => (
+           <div key={log.id} className="flex items-center justify-between p-3 border-b border-gray-50 text-xs font-bold font-mono">
+              <div className="flex items-center gap-4">
+                 <span className="text-gray-400">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                 <span className="text-blue-600 uppercase">[{log.action}]</span>
+                 <span className="text-gray-900">{log.details}</span>
+              </div>
+              <span className="text-gray-400">{log.userName}</span>
+           </div>
+         ))}
+      </div>
     </div>
   );
 }

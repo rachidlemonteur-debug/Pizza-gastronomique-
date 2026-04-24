@@ -65,6 +65,49 @@
       },
       "required": ["customerName", "total", "status"]
     },
+    "PointOfSale": {
+      "title": "Store Location",
+      "description": "A physical point of sale for the restaurant",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "phone": { "type": "string" },
+        "hours": { "type": "object" },
+        "priority": { "type": "number" },
+        "isOpen": { "type": "boolean" },
+        "district": { "type": "string" }
+      },
+      "required": ["name", "address", "lat", "lng"]
+    },
+    "Review": {
+      "title": "Customer Review",
+      "description": "Feedback from customers",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerName", "rating"]
+    },
+    "ActivityLog": {
+      "title": "System Activity",
+      "description": "Log of admin actions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["userId", "action", "timestamp"]
+    },
     "Admin": {
       "title": "Admin Role",
       "description": "Admin access list",
@@ -92,6 +135,18 @@
     "/orders/{orderId}": {
       "schema": { "$ref": "#/entities/Order" },
       "description": "Customer orders"
+    },
+    "/points_of_sale/{posId}": {
+      "schema": { "$ref": "#/entities/PointOfSale" },
+      "description": "Store locations"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Customer reviews"
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Admin activity logs"
     },
     "/admins/{userId}": {
       "schema": { "$ref": "#/entities/Admin" },

@@ -126,6 +126,10 @@ interface CartContextType {
   globalProducts: ProductInfo[];
   globalCategories: any[];
   globalConfig: any;
+  globalPOS: any[];
+  selectedPOS: any | null;
+  setSelectedPOS: (pos: any | null) => void;
+  userCoords: { lat: number, lng: number } | null;
 }
 const CartContext = createContext<CartContextType | null>(null);
 const useCart = () => { const ctx = useContext(CartContext); if (!ctx) throw new Error("Missing CartProvider"); return ctx; };
@@ -166,6 +170,8 @@ export default function App() {
   const [country, setCountry] = useState<keyof typeof COUNTRIES>('MG');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [selectedPOS, setSelectedPOS] = useState<any | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
 
   // Sync state with localstorage
   useEffect(() => {
@@ -181,10 +187,38 @@ export default function App() {
   const { data: globalProductsData } = useFirestore('products');
   const { data: globalCategoriesData } = useFirestore('categories', 'orderId');
   const { data: globalConfigData } = useFirestore('config', 'brandName');
+  const { data: globalPOSData } = useFirestore('points_of_sale', 'name');
 
   const globalProducts = globalProductsData.length > 0 ? globalProductsData : PRODUCTS;
   const globalCategories = globalCategoriesData.length > 0 ? globalCategoriesData : CATEGORIES;
   const globalConfig = globalConfigData.length > 0 ? globalConfigData[0] : null;
+  const globalPOS = globalPOSData.length > 0 ? globalPOSData : RESTAURANTS;
+
+  // Geolocation & Nearest POS logic
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserCoords(coords);
+        
+        // Find nearest POS if not already selected manually
+        if (!selectedPOS && globalPOS.length > 0) {
+          const nearest = [...globalPOS].sort((a, b) => {
+            const distA = Math.sqrt(Math.pow(a.lat - coords.lat, 2) + Math.pow(a.lng - coords.lng, 2));
+            const distB = Math.sqrt(Math.pow(b.lat - coords.lat, 2) + Math.pow(b.lng - coords.lng, 2));
+            return distA - distB;
+          })[0];
+          setSelectedPOS(nearest);
+        }
+      }, (err) => {
+        console.warn("Geolocation permission denied", err);
+        // Fallback to highest priority/first POS if permission denied and none selected
+        if (!selectedPOS && globalPOS.length > 0) {
+          setSelectedPOS(globalPOS[0]);
+        }
+      });
+    }
+  }, [globalPOS.length]);
 
   const addToCart = (product: ProductInfo, quantity: number, instructions: string = '') => {
     setCart(prev => {
@@ -230,7 +264,7 @@ export default function App() {
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=Bonjour,%20je%20souhaite%20commander.`;
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder, globalProducts, globalCategories, globalConfig }}>
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder, globalProducts, globalCategories, globalConfig, globalPOS, selectedPOS, setSelectedPOS, userCoords }}>
       <Router>
         <AppWithRouter />
       </Router>
@@ -240,8 +274,15 @@ export default function App() {
 
 // --- LAYOUT : FRANCHISE HEADER ---
 function Layout({ children }: { children: React.ReactNode }) {
-  const { getCartCount, getCartTotal, selectedProduct, setSelectedProduct, setIsCartOpen, isCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, cart, activeOrder, globalConfig } = useCart();
+  const { 
+    getCartCount, getCartTotal, setIsCartOpen, isCartOpen, 
+    country, setCountry, formatPriceC, whatsappLink, 
+    cart, activeOrder, globalConfig, globalPOS, 
+    selectedPOS, setSelectedPOS, userCoords,
+    selectedProduct, setSelectedProduct, lastAdded
+  } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -303,6 +344,10 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* HEADER GLOBALE FRANCHISE */}
       <header className="sticky top-0 w-full z-40 bg-white shadow-sm border-b border-gray-200">
+        <div className="bg-[#DA291C] text-white py-1 px-4 text-[10px] sm:text-xs font-black uppercase text-center tracking-[0.2em] relative overflow-hidden group">
+           <div className="relative z-10">{globalConfig?.promoText || "-20% SUR LE MENU XL AVEC LE CODE GASTRO20"}</div>
+           <div className="absolute inset-0 bg-gradient-to-r from-red-600 via-transparent to-red-600 opacity-20 animate-pulse"></div>
+        </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
           
           <div className="flex items-center gap-4">
@@ -314,16 +359,20 @@ function Layout({ children }: { children: React.ReactNode }) {
                  <span className="font-black text-2xl sm:text-3xl text-[#FFC72C] leading-none tracking-tighter">G.</span>
               </div>
               <div className="flex flex-col hidden sm:flex">
-                <span className="font-black text-xl tracking-tight leading-none text-[#DA291C] uppercase">La Gastronomie</span>
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{currentCountry.name}</span>
+                <span className="font-black text-xl tracking-tight leading-none text-[#DA291C] uppercase truncate max-w-[120px]">{globalConfig?.brandName || 'La Gastronomie'}</span>
+                {selectedPOS && (
+                  <button onClick={() => setIsPOSModalOpen(true)} className="flex items-center gap-1 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-[#DA291C] transition-colors">
+                    <MapPin className="w-2 h-2" /> {selectedPOS.name}
+                  </button>
+                )}
               </div>
             </Link>
           </div>
 
-          <div className="hidden lg:flex items-center space-x-1 font-bold text-[15px]">
-            <Link to="/menu" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/menu' ? 'bg-[#FFC72C] text-[#DA291C]' : 'text-gray-700 hover:bg-gray-100'}`}>Nos Menus</Link>
-            <Link to="/tracking" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/tracking' ? 'bg-[#DA291C] text-white' : 'text-gray-700 hover:bg-gray-100 flex items-center gap-2'}`}>Suivi de Commande <Navigation className="w-4 h-4 text-[#DA291C]"/></Link>
-            <Link to="/restaurants" className={`px-4 py-2.5 rounded-full transition-colors ${location.pathname === '/restaurants' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>Restaurants & Drive</Link>
+          <div className="hidden lg:flex items-center gap-2 font-bold text-[15px]">
+            <Link to="/menu" className={`px-4 py-2.5 rounded-xl transition-colors ${location.pathname === '/menu' ? 'bg-[#FFC72C] text-[#DA291C]' : 'text-gray-700 hover:bg-gray-100'}`}>Carte</Link>
+            <Link to="/restaurants" className={`px-4 py-2.5 rounded-xl transition-colors ${location.pathname === '/restaurants' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-700 hover:bg-gray-100 flex items-center gap-2'}`}>Points de Vente <MapPin className="w-4 h-4 text-[#DA291C]"/></Link>
+            <Link to="/tracking" className={`px-4 py-2.5 rounded-xl transition-colors ${location.pathname === '/tracking' ? 'bg-[#DA291C] text-white shadow-md' : 'text-gray-700 hover:bg-gray-100 flex items-center gap-2'}`}>Suivi <Navigation className="w-4 h-4 text-[#DA291C]"/></Link>
           </div>
 
           <div className="flex items-center gap-2 lg:gap-3">
@@ -373,13 +422,15 @@ function Layout({ children }: { children: React.ReactNode }) {
               <div className="p-6 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                  <div>
                    <span className="text-sm font-bold text-gray-500 uppercase tracking-wider block mb-1">Votre Pays</span>
-                   <button onClick={handleCountrySwitch} className="font-black text-lg text-gray-900 flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-200">
+                   <button onClick={handleCountrySwitch} className="font-black text-sm text-gray-900 flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-200 uppercase tracking-widest leading-none">
                      {currentCountry.flag} {currentCountry.name}
                    </button>
                  </div>
                  <div className="text-right">
-                   <span className="text-xs text-gray-500 uppercase font-bold">Devise</span>
-                   <p className="font-black text-lg text-[#DA291C]">{currentCountry.currency}</p>
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Resto Sélectionné</span>
+                    <button onClick={() => { setIsMobileMenuOpen(false); setIsPOSModalOpen(true); }} className="font-black text-sm text-[#DA291C] flex items-center gap-1 justify-end">
+                      <MapPin className="w-3 h-3" /> {selectedPOS?.name || "Choisir un resto"}
+                    </button>
                  </div>
               </div>
 
@@ -556,7 +607,64 @@ function Layout({ children }: { children: React.ReactNode }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <POSSelectionModal isOpen={isPOSModalOpen} onClose={() => setIsPOSModalOpen(false)} />
     </div>
+  );
+}
+
+function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
+  const { globalPOS, selectedPOS, setSelectedPOS, userCoords } = useCart();
+  
+  const sortedPOS = [...globalPOS].sort((a, b) => {
+    if (!userCoords) return 0;
+    const distA = Math.sqrt(Math.pow((a.lat || 0) - userCoords.lat, 2) + Math.pow((a.lng || 0) - userCoords.lng, 2));
+    const distB = Math.sqrt(Math.pow((b.lat || 0) - userCoords.lat, 2) + Math.pow((b.lng || 0) - userCoords.lng, 2));
+    return distA - distB;
+  });
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-md" />
+          <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative bg-white w-full max-w-md rounded-[3rem] overflow-hidden shadow-2xl">
+            <div className="p-8 pb-4">
+              <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter mb-2">Choisir mon resto</h2>
+              <p className="text-gray-500 font-bold text-sm mb-6 uppercase tracking-widest">Le service est optimisé pour votre emplacement actuel.</p>
+              
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                {sortedPOS.map((pos: any, idx: number) => {
+                  const dist = userCoords ? Math.round(Math.sqrt(Math.pow((pos.lat || 0) - userCoords.lat, 2) + Math.pow((pos.lng || 0) - userCoords.lng, 2)) * 111) : null;
+                  const isNearest = idx === 0 && userCoords;
+                  
+                  return (
+                    <button 
+                      key={pos.id} 
+                      onClick={() => { setSelectedPOS(pos); onClose(); }}
+                      className={`w-full p-4 rounded-[2rem] border-2 transition-all flex flex-col items-start gap-1 relative overflow-hidden ${selectedPOS?.id === pos.id ? 'border-[#DA291C] bg-red-50/50' : 'border-gray-100 hover:border-[#FFC72C] bg-white'}`}
+                    >
+                      {isNearest && <span className="absolute top-0 right-0 bg-[#FFC72C] text-[#DA291C] px-3 py-1 font-black text-[10px] rounded-bl-xl uppercase tracking-tighter shadow-sm">À proximité !</span>}
+                      <span className="font-black text-lg text-gray-900 flex items-center gap-2">
+                        {pos.name}
+                        {selectedPOS?.id === pos.id && <CheckCircle className="w-4 h-4 text-green-500" />}
+                      </span>
+                      <span className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5 line-clamp-1 text-left">
+                        <MapPin className="w-3 h-3 text-[#DA291C]" /> {pos.address}
+                      </span>
+                      {dist !== null && <span className="text-[10px] font-black text-[#DA291C] uppercase tracking-widest mt-1">À environ {dist} km de vous</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="p-6 bg-gray-50 border-t border-gray-100 text-center">
+               <button onClick={onClose} className="font-black text-xs text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors">Rester sur le site</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -1238,76 +1346,55 @@ function PageLoyalty() {
 }
 
 function PageRestaurants() {
-  const { country } = useCart();
+  const { country, globalPOS, setSelectedPOS, selectedPOS, userCoords } = useCart();
   const currentCountry = COUNTRIES[country];
   
-  const [restaurants, setRestaurants] = useState<typeof RESTAURANTS>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchRestaurants = () => {
-    setIsLoading(true);
-    setError(null);
-    simulateApiCall(RESTAURANTS, 0.3)
-      .then(res => {
-        setRestaurants(res);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setIsLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    fetchRestaurants();
-  }, [country]);
-
-  // Create dynamic restaurants if we want to ensure SN has at least one example
-  const displayRestaurants = restaurants.filter(r => r.country === country);
-
-  if (displayRestaurants.length === 0 && country === 'SN') {
-    // Inject a dummy for SN if none is hardcoded in the list
-    displayRestaurants.push({
-      id: 999, country: 'SN', name: "Gastro Dakar Almadies", address: "Route des Almadies, Dakar", distance: "0 km", status: "Ouvert bientôt", phone: "+221 77 123 45 67", type: "Drive & Sur place"
-    });
-  }
+  const displayRestaurants = globalPOS.filter(r => r.country === country || !r.country);
 
   return (
     <div className="bg-gray-50 min-h-screen pb-24">
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <h1 className="text-4xl font-black uppercase tracking-tight text-gray-900 mb-2">Nos Restaurants</h1>
-          <p className="text-gray-500 font-bold text-sm">Découvrez nos Drives & Restaurants en {currentCountry.name}.</p>
-        </div>
+      <div className="bg-[#DA291C] h-48 sm:h-64 flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
+        <h1 className="text-4xl sm:text-6xl font-black uppercase tracking-tighter text-white mb-2 relative z-10">Nos Restaurants</h1>
+        <p className="text-red-100 font-black tracking-widest text-xs sm:text-sm uppercase relative z-10">Trouvez le Gastro le plus proche de vous</p>
       </div>
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
-        {isLoading ? (
-          <div className="py-20 flex flex-col items-center justify-center">
-            <div className="w-12 h-12 border-8 border-gray-100 border-t-[#DA291C] rounded-full animate-spin mb-4"></div>
-            <p className="font-bold text-gray-500 uppercase tracking-widest text-sm">Géolocalisation...</p>
-          </div>
-        ) : error ? (
-          <ApiErrorState message={error} onRetry={fetchRestaurants} />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayRestaurants.map(r => (
-              <div key={r.id} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="font-black text-xl uppercase tracking-tighter text-gray-900">{r.name}</h3>
-                  <span className="bg-gray-100 text-gray-600 text-[10px] font-black uppercase px-2 py-1 rounded">{r.type}</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 relative z-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayRestaurants.map(r => {
+            const isSelected = selectedPOS?.id === r.id;
+            const dist = userCoords ? Math.round(Math.sqrt(Math.pow(r.lat - userCoords.lat, 2) + Math.pow(r.lng - userCoords.lng, 2)) * 111) : null;
+
+            return (
+              <div key={r.id} className={`bg-white p-8 rounded-[2.5rem] border-2 transition-all shadow-xl group ${isSelected ? 'border-[#DA291C] ring-4 ring-red-50' : 'border-white hover:border-[#FFC72C]'}`}>
+                <div className="flex justify-between items-start mb-6">
+                   <div className="bg-gray-100 p-4 rounded-2xl group-hover:bg-[#FFC72C] group-hover:text-[#DA291C] transition-colors">
+                      <UtensilsCrossed className="w-6 h-6" />
+                   </div>
+                   <span className={`text-[10px] font-black uppercase px-4 py-1.5 rounded-full tracking-widest ${r.isOpen !== false ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-400'}`}>
+                      {r.isOpen !== false ? 'Ouvert' : 'Temporairement Fermé'}
+                   </span>
                 </div>
-                <p className="font-bold text-gray-500 mb-2"><span className="text-gray-400">📍</span> {r.address}</p>
-                <p className="font-bold text-gray-500 mb-4"><span className="text-gray-400">📞</span> {r.phone}</p>
-                <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
-                  <span className="text-sm font-black text-[#25D366]">{r.status}</span>
-                  {r.distance && <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">{r.distance}</span>}
+                
+                <h3 className="font-black text-2xl uppercase tracking-tighter text-gray-900 mb-2">{r.name}</h3>
+                <p className="font-bold text-gray-500 mb-1 flex items-center gap-2"><MapPin className="w-4 h-4 text-[#DA291C]" /> {r.address}</p>
+                {dist !== null && <p className="text-xs font-black text-[#DA291C] uppercase tracking-widest mb-6">À {dist} km de votre position</p>}
+                
+                <div className="space-y-3 mt-6">
+                   <button 
+                     onClick={() => { setSelectedPOS(r); window.scrollTo(0,0); }}
+                     className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg transition-all ${isSelected ? 'bg-gray-900 text-white' : 'bg-[#DA291C] text-white hover:bg-red-700'}`}
+                   >
+                     {isSelected ? 'Restaurant Sélectionné' : 'Commander ici'}
+                   </button>
+                   <a href={`tel:${r.phone?.replace(/\s/g, '') || COUNTRIES[country].phone}`} className="w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs border-2 border-gray-100 text-gray-400 flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors">
+                      <Phone className="w-4 h-4" /> Appeler le restaurant
+                   </a>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1462,9 +1549,9 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 
 // --- TRACKING PAGE ---
 function PageTracking() {
-  const { activeOrder, formatPriceC, whatsappNumber } = useCart();
+  const { activeOrder, formatPriceC, whatsappNumber, selectedPOS } = useCart();
   const navigate = useNavigate();
-  const storePos: [number, number] = [-18.910012, 47.525581];
+  const storePos: [number, number] = [selectedPOS?.lat || -18.910012, selectedPOS?.lng || 47.525581];
   const destPos: [number, number] = activeOrder?.orderMode === 'livraison' ? [-18.918000, 47.532000] : storePos;
   
   const [pos, setPos] = useState<[number, number]>(storePos);
