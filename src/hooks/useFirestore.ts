@@ -9,7 +9,7 @@ export function useFirestore(colName: string, orderField: string = 'name') {
   useEffect(() => {
     const q = query(collection(db, colName), orderBy(orderField));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setData(snapshot.docs.map(d => ({ ...d.data(), orderNumber: d.data().orderNumber || d.data().id, id: d.id })));
+      setData(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
       setLoading(false);
     }, (err) => {
       console.error(err);
