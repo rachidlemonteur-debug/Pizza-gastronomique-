@@ -337,7 +337,7 @@ function Layout({ children }: { children: React.ReactNode }) {
              <div className="absolute inset-0 bg-white rounded-full animate-ping opacity-30"></div>
              <Bike className="w-5 h-5 relative z-10" />
            </div>
-           <span className="font-extrabold text-sm uppercase tracking-widest text-red-50">Commande {activeOrder.id} en cours — Suivez votre livreur !</span>
+           <span className="font-extrabold text-sm uppercase tracking-widest text-red-50">Commande {activeOrder.orderNumber} en cours — Suivez votre livreur !</span>
            <ChevronRight className="w-4 h-4 text-white opacity-50" />
         </div>
       )}
@@ -737,7 +737,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     setIsProcessing(true);
     
     const newOrderData = {
-       id: 'CMD-' + Math.floor(1000 + Math.random() * 9000), // Human ID
+       orderNumber: 'CMD-' + Math.floor(1000 + Math.random() * 9000), // Human ID
        status: 'pending',
        total: getCartTotal(),
        items: [...cart], // clone to keep items
@@ -1729,7 +1729,7 @@ function PageTracking() {
 
   const sendToWhatsApp = () => {
     if (!activeOrder) return;
-    let message = `*🔴 INFOS SUR MA COMMANDE ${activeOrder.id}*\n\n`;
+    let message = `*🔴 INFOS SUR MA COMMANDE ${activeOrder.orderNumber}*\n\n`;
     message += `*Nom :* ${activeOrder.customerName}\n`;
     message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
     activeOrder.items.forEach((item: any) => {
@@ -1764,7 +1764,7 @@ function PageTracking() {
                <span className="bg-[#DA291C]/10 text-[#DA291C] px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-3 inline-block">
                  {activeOrder.orderMode === 'livraison' ? 'Livraison en cours' : 'À récupérer'}
                </span>
-               <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-2">Commande {activeOrder.id}</h1>
+               <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-2">Commande {activeOrder.orderNumber}</h1>
                <p className="text-gray-500 font-bold flex items-center gap-2"><MapPin className="w-4 h-4" /> {activeOrder.address}</p>
             </div>
             
@@ -1908,7 +1908,7 @@ function PageTracking() {
               <p className="text-gray-500 font-bold mb-8 max-w-lg text-lg">Veuillez vous présenter au comptoir du restaurant avec le numéro de commande de manière à récupérer votre commande chaude.</p>
               <div className="bg-gray-50 border border-gray-200 px-10 py-8 rounded-3xl">
                  <span className="text-sm font-black uppercase text-gray-400 block mb-2">Code de Retrait</span>
-                 <span className="text-5xl font-black text-gray-900 tracking-widest">{activeOrder.id}</span>
+                 <span className="text-5xl font-black text-gray-900 tracking-widest">{activeOrder.orderNumber}</span>
               </div>
             </div>
           )}

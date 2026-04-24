@@ -750,7 +750,7 @@ function AdminOrders({ role }: { role: string | null }) {
        const dateStr = new Date(order.timestamp).toLocaleString('fr-FR');
        const itemsStr = order.items?.map((item: any) => `${item.quantity}x ${item.product.name}`).join('; ') || '';
        // Escape double quotes inside strings
-       const row = `"${order.id}","${dateStr}","${order.customerName}","${order.orderMode}","${order.status}","${order.total}","${itemsStr}"`;
+       const row = `"${order.orderNumber}","${dateStr}","${order.customerName}","${order.orderMode}","${order.status}","${order.total}","${itemsStr}"`;
        csvContent += row + "\n";
     });
 
@@ -820,10 +820,10 @@ function AdminOrders({ role }: { role: string | null }) {
       ) : (
         <div className="space-y-4">
           {displayedOrders.map((order: any) => (
-            <div key={order.uid} className="flex flex-col lg:flex-row justify-between p-4 sm:p-5 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+            <div key={order.id} className="flex flex-col lg:flex-row justify-between p-4 sm:p-5 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <h3 className="font-black text-xl text-gray-900">#{order.id}</h3>
+                  <h3 className="font-black text-xl text-gray-900">#{order.orderNumber}</h3>
                   <span className={`px-3 py-1 rounded-md text-xs font-black uppercase border tracking-widest flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
                     {order.status === 'pending' && <span className="w-2 h-2 rounded-full bg-red-500/80"></span>}
                     {getStatusText(order.status)}
