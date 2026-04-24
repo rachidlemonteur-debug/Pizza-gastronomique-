@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
-  BarChart, Settings, ShoppingBag, List, Users, 
+  BarChart as BarChartIcon, Settings, ShoppingBag, List, Users, 
   LogOut, Plus, Trash2, Edit, Save, X, Eye, 
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
   Download, UploadCloud, ShieldAlert, Star, Activity, MapPin
@@ -11,6 +11,9 @@ import { PRODUCTS, CATEGORIES, RESTAURANTS } from './App';
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { useFirestore } from './hooks/useFirestore';
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, Legend } from 'recharts';
+import { format, subDays, startOfDay, isAfter, startOfWeek, startOfMonth, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 // Activity Logger Utility
 const logActivity = async (action: string, details: string) => {
@@ -88,7 +91,7 @@ export default function AdminApp() {
   };
 
   const navItems = [
-    { name: 'Tableau de bord', path: '/admin', icon: <BarChart className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
+    { name: 'Tableau de bord', path: '/admin', icon: <BarChartIcon className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Commandes', path: '/admin/orders', icon: <ShoppingBag className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
@@ -688,29 +691,112 @@ function AdminLogin() {
 }
 
 function Dashboard() {
-  const { data: orders, loading: ordersLoading } = useFirestore('orders');
+  const { data: orders, loading: ordersLoading } = useFirestore('orders', 'timestamp');
   const { data: products, loading: productsLoading } = useFirestore('products');
+  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('week');
   
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayOrders = orders.filter((o: any) => o.createdAt?.startsWith(todayStr) || true); 
-  
-  const activeOrdersCount = orders.filter((o: any) => !['completed', 'canceled'].includes(o.status)).length;
-  const completedTodayCount = orders.filter((o: any) => o.status === 'completed' && (o.createdAt?.startsWith(todayStr) || true)).length;
-
   if (ordersLoading || productsLoading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
+
+  const today = new Date();
+  
+  // Filtering Orders
+  const filteredOrders = orders.filter((o: any) => {
+    if (!o.timestamp) return false;
+    const orderDate = new Date(o.timestamp);
+    if (period === 'day') return isAfter(orderDate, startOfDay(today));
+    if (period === 'week') return isAfter(orderDate, startOfWeek(today, { weekStartsOn: 1 }));
+    return isAfter(orderDate, startOfMonth(today));
+  });
+
+  const activeOrdersCount = orders.filter((o: any) => !['completed', 'canceled'].includes(o.status)).length;
+  const completedCount = filteredOrders.filter((o: any) => o.status === 'completed').length;
+  const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+  // Peak Hours Math
+  const hourCounts = new Array(24).fill(0);
+  filteredOrders.forEach((o: any) => {
+    if (o.timestamp) {
+       const hour = new Date(o.timestamp).getHours();
+       hourCounts[hour]++;
+    }
+  });
+
+  const chartDataHours = hourCounts.map((count, hour) => ({
+    time: `${hour}h`,
+    Commandes: count
+  })).filter((c, idx) => c.Commandes > 0 || (idx >= 8 && idx <= 22)); 
+
+  // Top Products Math
+  const productCount: Record<string, number> = {};
+  filteredOrders.forEach((o: any) => {
+     if (o.items && Array.isArray(o.items)) {
+        o.items.forEach((item: any) => {
+           if (item.product && item.product.id) {
+               // Limit product name length for charting
+               let name = item.product.name;
+               if (name.length > 20) name = name.substring(0, 20) + '...';
+               productCount[name] = (productCount[name] || 0) + item.quantity;
+           }
+        });
+     }
+  });
+
+  const chartDataProducts = Object.entries(productCount)
+     .sort((a, b) => b[1] - a[1]) // Sort descending
+     .slice(0, 7) // Top 7 
+     .map(([name, qty]) => ({ name, Ventes: qty }));
 
   return (
     <div>
-      <h2 className="font-black text-3xl mb-6 text-gray-900 tracking-tight">Tableau de Bord</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h2 className="font-black text-3xl text-gray-900 tracking-tight">Tableau de Bord</h2>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex mt-2 sm:mt-0">
+           <button onClick={() => setPeriod('day')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest ${period === 'day' ? 'bg-[#DA291C] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Aujourd'hui</button>
+           <button onClick={() => setPeriod('week')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest ${period === 'week' ? 'bg-[#DA291C] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>7 Jours</button>
+           <button onClick={() => setPeriod('month')} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest ${period === 'month' ? 'bg-[#DA291C] text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Mois</button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-         <StatsCard title="Commandes du Jour" value={todayOrders.length} color="bg-blue-100 text-blue-700" />
+         <StatsCard title={`Commandes (${period})`} value={filteredOrders.length} color="bg-blue-100 text-blue-700" />
          <StatsCard title="En Cours" value={activeOrdersCount} color="bg-orange-100 text-orange-700" pulse />
-         <StatsCard title="Terminées" value={completedTodayCount} color="bg-green-100 text-green-700" />
+         <StatsCard title="Revenus" value={`${totalRevenue.toLocaleString()} Ar`} color="bg-green-100 text-green-700" />
          <StatsCard title="Produits Actifs" value={products.length} color="bg-purple-100 text-purple-700" />
       </div>
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm mt-8 text-center text-gray-500 font-bold py-16">
-        <Activity className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-        <p className="text-lg">Pilotez votre activité depuis l'onglet <span className="text-gray-900 font-black">Commandes</span>.</p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Peak Hours Chart */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+           <h3 className="font-black text-gray-900 mb-6 uppercase tracking-widest">Heures de Pointe</h3>
+           <div className="h-[300px] w-full">
+             <ResponsiveContainer width="100%" height="100%">
+               <LineChart data={chartDataHours} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                 <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 'bold' }} dy={10} />
+                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 'bold' }} />
+                 <RechartsTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }} />
+                 <Line type="monotone" dataKey="Commandes" stroke="#DA291C" strokeWidth={4} activeDot={{ r: 8, fill: '#FFC72C', stroke: '#DA291C', strokeWidth: 3 }} />
+               </LineChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
+
+        {/* Top Selling Products Chart */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+           <h3 className="font-black text-gray-900 mb-6 uppercase tracking-widest">Top Ventes Produits</h3>
+           <div className="h-[300px] w-full">
+             <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={chartDataProducts} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                 <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                 <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#374151', fontWeight: 'bold' }} width={120} />
+                 <RechartsTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }} />
+                 <Bar dataKey="Ventes" fill="#FFC72C" radius={[0, 8, 8, 0]} barSize={24} />
+               </BarChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
       </div>
     </div>
   );
@@ -750,7 +836,7 @@ function AdminOrders({ role }: { role: string | null }) {
        const dateStr = new Date(order.timestamp).toLocaleString('fr-FR');
        const itemsStr = order.items?.map((item: any) => `${item.quantity}x ${item.product.name}`).join('; ') || '';
        // Escape double quotes inside strings
-       const row = `"${order.id}","${dateStr}","${order.customerName}","${order.orderMode}","${order.status}","${order.total}","${itemsStr}"`;
+       const row = `"${order.orderNumber || order.id}","${dateStr}","${order.customerName}","${order.orderMode}","${order.status}","${order.total}","${itemsStr}"`;
        csvContent += row + "\n";
     });
 
@@ -823,7 +909,7 @@ function AdminOrders({ role }: { role: string | null }) {
             <div key={order.id} className="flex flex-col lg:flex-row justify-between p-4 sm:p-5 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <h3 className="font-black text-xl text-gray-900">#{order.id}</h3>
+                  <h3 className="font-black text-xl text-gray-900">#{order.orderNumber || order.id}</h3>
                   <span className={`px-3 py-1 rounded-md text-xs font-black uppercase border tracking-widest flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
                     {order.status === 'pending' && <span className="w-2 h-2 rounded-full bg-red-500/80"></span>}
                     {getStatusText(order.status)}

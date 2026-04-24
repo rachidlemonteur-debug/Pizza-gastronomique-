@@ -18,17 +18,19 @@ export function useFirestore(colName: string, orderField: string = 'name') {
     return () => unsubscribe();
   }, [colName, orderField]);
 
-  const handleCall = async (cb: Function) => {
+  const handleCall = async (fn: () => Promise<any>) => {
     try {
-      await cb();
+      return await fn();
     } catch (err: any) {
-      if (err.message?.includes('permission')) {
-        alert("Action refusée : Votre rôle ne vous permet pas d'effectuer cette opération.");
+      if (err.message && err.message.toLowerCase().includes('permission')) {
+        alert("Action refusée : Vous n'avez pas la permission de faire ça. Connectez-vous avec un compte Administrateur.");
       } else {
-        console.error(err);
+        alert("Une erreur est survenue : " + (err.message || 'Erreur inconnue'));
       }
+      console.error(err);
+      throw err;
     }
-  }
+  };
 
   const add = async (item: any) => {
     await handleCall(() => addDoc(collection(db, colName), item));
