@@ -9,6 +9,8 @@ import {
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from './firebase';
 
 // Fix for default marker icons in React Leaflet
 // @ts-ignore
@@ -29,6 +31,8 @@ function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }
   return null;
 }
 import AdminApp from './Admin';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 import { useFirestore } from './hooks/useFirestore';
 
 // --- ROBUST API SIMULATION UTILITY ---
@@ -1688,7 +1692,7 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 
 // --- TRACKING PAGE ---
 function PageTracking() {
-  const { activeOrder, formatPriceC, whatsappNumber, selectedPOS } = useCart();
+  const { activeOrder, setActiveOrder, formatPriceC, whatsappNumber, selectedPOS } = useCart();
   const navigate = useNavigate();
   const storePos: [number, number] = [selectedPOS?.lat || -18.910012, selectedPOS?.lng || 47.525581];
   const destPos: [number, number] = activeOrder?.orderMode === 'livraison' ? [-18.918000, 47.532000] : storePos;
@@ -1697,6 +1701,26 @@ function PageTracking() {
   const [isLiveGPS, setIsLiveGPS] = useState(false);
   const [dynamicEta, setDynamicEta] = useState<number>(activeOrder?.etaMinutes || 0);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
+
+  // REAL-TIME FIRESTORE SYNC
+  useEffect(() => {
+    if (!activeOrder?.orderNumber) return;
+    const q = query(collection(db, 'orders'), where('orderNumber', '==', activeOrder.orderNumber));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docData = snapshot.docs[0].data();
+        const docId = snapshot.docs[0].id;
+        setActiveOrder((prev: any) => {
+           if (!prev) return prev;
+           if (prev.status !== docData.status || prev.id !== docId) {
+             return { ...prev, ...docData, id: docId };
+           }
+           return prev;
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, [activeOrder?.orderNumber, setActiveOrder]);
 
   // FETCH REAL ROUTE FROM OPENSTREETMAP (OSRM)
   useEffect(() => {
@@ -1955,9 +1979,6 @@ function PageTracking() {
                        <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /></div>
                      </div>
                    </div>
-                   <button className="bg-[#DA291C] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
-                     <Phone className="w-5 h-5 fill-current" />
-                   </button>
                  </div>
               </div>
             </div>
