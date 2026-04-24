@@ -77,7 +77,7 @@ const homeIcon = new L.DivIcon({
 });
 
 // --- DATA: FRANCHISE DRIVEN ---
-const CATEGORIES = [
+export const CATEGORIES = [
   { id: 'all', name: 'Tous', icon: '🍽️', color: 'bg-gray-100', text: 'text-gray-600' },
   { id: '1', name: 'Nos Menus XL', icon: '🍟', color: 'bg-[#FFC72C]', text: 'text-[#DA291C]' },
   { id: '2', name: 'Les Burgers', icon: '🍔', color: 'bg-orange-100', text: 'text-orange-600' },
@@ -91,7 +91,7 @@ const PROMOS = [
   { id: 'promo2', title: 'Box Enfant', subtitle: 'Menu complet + 1 Jouet Magique', tag: 'Nouveau Jouet !', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&q=80', color: 'bg-[#FFC72C]', text: 'text-[#DA291C]' },
 ];
 
-const PRODUCTS = [
+export const PRODUCTS = [
   { id: 'p1', name: 'Menu Big Gastro', description: 'Notre burger signature double étage, portion de frites dorées moyenne, boisson 40cl au choix.', price: 18000, image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=100', categoryId: '1', badge: 'N°1 Des Ventes', popular: true },
   { id: 'p5', name: 'Menu Pizza Suprême', description: 'Pizza moyenne au choix, 2 ailerons croustillants, boisson 40cl.', price: 22000, image: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=100', categoryId: '1', popular: true },
   { id: 'p2', name: 'Burger Chicken Crispy', description: 'Poulet pané aux 11 épices, mayonnaise légère, salade croquante.', price: 12000, oldPrice: 15000, image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&q=100', categoryId: '2', badge: 'Deal', popular: true },
@@ -102,7 +102,7 @@ const PRODUCTS = [
   { id: 'p8', name: 'Soda Limonade G.', description: 'Notre limonade artisanale hyper rafraîchissante, citron vert et menthe.', price: 4000, image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=100', categoryId: '5', popular: true }
 ];
 
-const RESTAURANTS = [
+export const RESTAURANTS = [
   { id: 1, country: 'MG', name: "Gastro Analakely", address: "Avenue de l'Indépendance", distance: "0.5 km", status: "Ouvert - Drive 24h/24", phone: "032 07 350 26", type: "Drive & Sur place", lat: -18.905, lng: 47.525 },
   { id: 2, country: 'MG', name: "Gastro Ankorondrano", address: "Galerie Zodiaque", distance: "3.2 km", status: "Ouvert jusqu'à 23h", phone: "032 07 350 27", type: "Sur place & Bornes", lat: -18.880, lng: 47.520 },
   { id: 3, country: 'MG', name: "Gastro Ilafy", address: "Parc commercial", distance: "6.8 km", status: "Ouvert jusqu'à 22h", phone: "032 07 350 28", type: "Drive uniquement", lat: -18.850, lng: 47.560 },
@@ -208,10 +208,10 @@ export default function App() {
   const { data: globalConfigData } = useFirestore('config', 'brandName');
   const { data: globalPOSData } = useFirestore('points_of_sale', 'name');
 
-  const globalProducts = globalProductsData.length > 0 ? globalProductsData : PRODUCTS;
-  const globalCategories = globalCategoriesData.length > 0 ? globalCategoriesData : CATEGORIES;
+  const globalProducts = globalProductsData;
+  const globalCategories = globalCategoriesData;
   const globalConfig = globalConfigData.length > 0 ? globalConfigData[0] : null;
-  const globalPOS = globalPOSData.length > 0 ? globalPOSData : RESTAURANTS;
+  const globalPOS = globalPOSData;
 
   // Geolocation & Nearest POS logic
   useEffect(() => {
@@ -738,7 +738,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     
     const newOrderData = {
        id: 'CMD-' + Math.floor(1000 + Math.random() * 9000), // Human ID
-       status: 'en_route',
+       status: 'pending',
        total: getCartTotal(),
        items: [...cart], // clone to keep items
        orderMode: orderMode,
@@ -1037,7 +1037,11 @@ function PageHome() {
            <div className="flex overflow-x-auto sm:grid sm:grid-cols-6 gap-3 sm:gap-4 pb-4 sm:pb-0 hide-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
               {categories.slice(0, 6).map(cat => (
                 <Link to="/menu" key={cat.id} className={`${cat.color || 'bg-gray-100'} rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center gap-2 hover:-translate-y-1 sm:hover:-translate-y-2 transition-transform shadow-sm border border-black/5 min-w-[110px] shrink-0 snap-center`}>
-                   <span className="text-4xl sm:text-5xl drop-shadow-md">{cat.icon || '🍔'}</span>
+                   {cat.icon?.startsWith('http') || cat.icon?.startsWith('data:image') ? (
+                     <img src={cat.icon} alt={cat.name} className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-md" />
+                   ) : (
+                     <span className="text-4xl sm:text-5xl drop-shadow-md">{cat.icon || '🍔'}</span>
+                   )}
                    <span className={`font-black text-[11px] sm:text-sm uppercase text-center ${cat.text || 'text-gray-700'} leading-tight`}>{cat.name}</span>
                 </Link>
               ))}
@@ -1101,7 +1105,11 @@ function PageMenu() {
                   onClick={() => { setActiveCategory(cat.id); setSearchQuery(''); }} 
                   className={`flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none border-2 shrink-0 ${activeCategory === cat.id && !searchQuery ? 'bg-[#FFC72C] border-yellow-400 text-gray-900 shadow-md transform scale-105' : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:border-gray-200'}`}
                 >
-                  <span className="text-3xl filter drop-shadow-sm">{cat.icon || '🍔'}</span>
+                  {cat.icon?.startsWith('http') || cat.icon?.startsWith('data:image') ? (
+                    <img src={cat.icon} alt={cat.name} className="w-8 h-8 object-contain drop-shadow-sm" />
+                  ) : (
+                    <span className="text-3xl filter drop-shadow-sm">{cat.icon || '🍔'}</span>
+                  )}
                   <span className="font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">{cat.name}</span>
                 </button>
             ))}
@@ -1772,15 +1780,32 @@ function PageTracking() {
             </div>
           </div>
           
-          {/* Progress Bar Mock */}
+          {/* Tracker Status Progress */}
           <div className="mt-8">
              <div className="flex justify-between mb-2 text-xs font-bold text-gray-400 uppercase">
-                <span className="text-[#DA291C]">Préparation</span>
-                <span className={activeOrder.orderMode === 'livraison' ? 'text-[#FFC72C]' : ''}>En route</span>
-                <span>Livré</span>
+                <span className={(activeOrder.status === 'pending' || activeOrder.status === 'preparing') ? "text-[#DA291C]" : ""}>Préparation</span>
+                <span className={(activeOrder.status === 'ready' || activeOrder.status === 'delivering') ? "text-[#FFC72C]" : ""}>{activeOrder.orderMode === 'livraison' ? 'En route' : 'Prête'}</span>
+                <span className={activeOrder.status === 'completed' ? "text-[#25D366]" : ""}>{activeOrder.orderMode === 'livraison' ? 'Livré' : 'Récupéré'}</span>
              </div>
              <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
-                <motion.div initial={{ width: "30%" }} animate={{ width: "65%" }} transition={{ duration: 2 }} className="bg-gradient-to-r from-[#DA291C] to-[#FFC72C] h-full rounded-full" />
+                <div 
+                  className="bg-gradient-to-r from-[#DA291C] to-[#FFC72C] h-full rounded-full transition-all duration-1000" 
+                  style={{ 
+                    width: activeOrder.status === 'pending' ? '15%' : 
+                           activeOrder.status === 'preparing' ? '30%' : 
+                           activeOrder.status === 'ready' ? '60%' :
+                           activeOrder.status === 'delivering' ? '80%' : 
+                           activeOrder.status === 'completed' ? '100%' : '0%' 
+                  }} 
+                />
+             </div>
+             <div className="mt-4 text-center bg-gray-50 py-3 rounded-xl border border-gray-100">
+               {activeOrder.status === 'pending' && <p className="text-gray-500 font-bold text-sm">Commande reçue, en attente de confirmation...</p>}
+               {activeOrder.status === 'preparing' && <p className="text-[#DA291C] font-black text-sm uppercase tracking-wider">Vos plats sont en cours de préparation en cuisine ! 👨‍🍳</p>}
+               {activeOrder.status === 'ready' && <p className="text-[#FFC72C] font-black text-sm uppercase tracking-wider">{activeOrder.orderMode === 'livraison' ? 'Commande prête, attente du livreur.' : 'Commande prête, rendez-vous au comptoir !'} 🛍️</p>}
+               {activeOrder.status === 'delivering' && <p className="text-[#DA291C] font-black text-sm uppercase tracking-wider">Le livreur est en route vers chez vous ! 🛵</p>}
+               {activeOrder.status === 'completed' && <p className="text-[#25D366] font-black text-sm uppercase tracking-wider">Commande terminée. Bon appétit ! 🎉</p>}
+               {activeOrder.status === 'canceled' && <p className="text-red-600 font-black text-sm uppercase tracking-wider">Commande annulée.</p>}
              </div>
           </div>
         </div>

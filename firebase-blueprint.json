@@ -58,7 +58,7 @@
         },
         "status": {
           "type": "string",
-          "enum": ["pending", "accepted", "delivering", "completed", "canceled"]
+          "enum": ["pending", "preparing", "ready", "delivering", "completed", "canceled"]
         },
         "orderMode": { "type": "string" },
         "posId": { "type": "string" },

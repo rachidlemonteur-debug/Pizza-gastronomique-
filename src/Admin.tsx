@@ -4,9 +4,10 @@ import {
   BarChart, Settings, ShoppingBag, List, Users, 
   LogOut, Plus, Trash2, Edit, Save, X, Eye, 
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
-  Download, UploadCloud, ShieldAlert, Star
+  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin
 } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { PRODUCTS, CATEGORIES, RESTAURANTS } from './App';
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { useFirestore } from './hooks/useFirestore';
@@ -305,7 +306,7 @@ function AdminProducts({ role }: { role: string | null }) {
                 const prodData = {
                   name: e.target.name.value,
                   price: Number(e.target.price.value),
-                  image: imageBase64 || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
+                  image: imageBase64 || e.target.imageUrl.value || 'https://placehold.co/400x400?text=Produit',
                   description: e.target.description.value,
                   categoryId: e.target.category.value,
                   popular: e.target.popular.checked
@@ -322,11 +323,13 @@ function AdminProducts({ role }: { role: string | null }) {
                 setImageBase64('');
               }} className="space-y-5">
                  
-                 {/* Image Drag & Drop */}
+                 {/* Image Drag & Drop or URL */}
                  <div className="relative group border-2 border-dashed border-gray-300 rounded-2xl p-4 hover:border-[#FFC72C] transition-colors bg-gray-50 cursor-pointer overflow-hidden flex flex-col items-center justify-center min-h-[140px]">
                     <input type="file" accept="image/jpeg, image/png, image/webp" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full" />
                     {imageBase64 ? (
-                       <img src={imageBase64} className="h-28 object-contain rounded-lg shadow-sm" alt="Aperçu" />
+                       <img src={imageBase64} className="h-28 object-contain rounded-lg shadow-sm w-full" alt="Aperçu" />
+                    ) : editingItem?.image ? (
+                       <img src={editingItem.image} className="h-28 object-contain rounded-lg shadow-sm w-full" alt="Aperçu actuel" />
                     ) : (
                        <div className="text-center flex flex-col items-center">
                          <UploadCloud className="w-8 h-8 text-gray-400 mb-2 group-hover:text-[#DA291C] transition-colors" />
@@ -334,6 +337,11 @@ function AdminProducts({ role }: { role: string | null }) {
                          <span className="text-xs text-gray-400 font-bold mt-1">PNG, JPG, WEBP (Comprimé auto)</span>
                        </div>
                     )}
+                 </div>
+
+                 <div className="text-center">
+                   <p className="text-xs text-gray-400 font-bold mb-2">OU</p>
+                   <input name="imageUrl" placeholder="Coller le lien d'une image (URL)" defaultValue={editingItem?.image} className="w-full bg-gray-50 border border-gray-200 text-sm p-3 font-bold rounded-xl outline-none focus:border-[#FFC72C] transition-colors" />
                  </div>
 
                  <div>
@@ -376,19 +384,36 @@ function AdminCategories({ role }: { role: string | null }) {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const [imageBase64, setImageBase64] = useState<string>('');
 
   const handleEdit = (category: any) => {
     if (!canEdit) return;
     setEditingItem(category);
+    setImageBase64('');
     setShowModal(true);
   };
   
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 500 * 1024) { // 500kb max for category icon
+        alert('L\'image est trop volumineuse (max 500Ko)');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageBase64(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="font-black text-2xl text-gray-900">Catégories</h2>
         {canEdit && (
-        <button onClick={() => { setEditingItem(null); setShowModal(true); }} className="bg-[#DA291C] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700">
+        <button onClick={() => { setEditingItem(null); setImageBase64(''); setShowModal(true); }} className="bg-[#DA291C] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700">
           <Plus className="w-4 h-4"/> Ajouter
         </button>
         )}
@@ -401,7 +426,13 @@ function AdminCategories({ role }: { role: string | null }) {
           {categories.map(c => (
             <div key={c.id} className="bg-white p-4 border border-gray-200 rounded-2xl flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-3">
-                 <div className="text-3xl">{c.icon || '🍔'}</div>
+                 <div className="w-12 h-12 flex items-center justify-center bg-gray-50 rounded-xl">
+                   {c.icon?.startsWith('http') || c.icon?.startsWith('data:image') ? (
+                     <img src={c.icon} alt={c.name} className="w-8 h-8 object-contain" />
+                   ) : (
+                     <span className="text-3xl">{c.icon || '🍔'}</span>
+                   )}
+                 </div>
                  <div className="font-black">{c.name}</div>
               </div>
               {canEdit && (
@@ -417,32 +448,50 @@ function AdminCategories({ role }: { role: string | null }) {
       )}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
-           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-              <h3 className="font-black text-xl mb-4">{editingItem ? 'Modifier Catégorie' : 'Nouvelle Catégorie'}</h3>
+           <div className="bg-white rounded-3xl w-full max-w-sm p-6 sm:p-8 shadow-2xl">
+              <h3 className="font-black text-xl mb-6">{editingItem ? 'Modifier Catégorie' : 'Nouvelle Catégorie'}</h3>
               <form onSubmit={async (e: any) => {
                 e.preventDefault();
+                const iconValue = imageBase64 || e.target.icon.value || '🍔';
                 await (editingItem ? update(editingItem.id, {
                   name: e.target.name.value,
-                  icon: e.target.icon.value || '🍔'
+                  icon: iconValue
                 }) : add({
                   name: e.target.name.value,
-                  icon: e.target.icon.value || '🍔',
+                  icon: iconValue,
                   orderId: Date.now()
                 }));
                 setShowModal(false);
                 setEditingItem(null);
+                setImageBase64('');
               }} className="space-y-4">
+                 
+                 <div className="relative group border-2 border-dashed border-gray-300 rounded-2xl p-4 hover:border-[#FFC72C] transition-colors bg-gray-50 cursor-pointer overflow-hidden flex flex-col items-center justify-center min-h-[100px]">
+                    <input type="file" accept="image/jpeg, image/png, image/webp, image/svg+xml" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full" />
+                    {imageBase64 ? (
+                       <img src={imageBase64} className="h-16 object-contain rounded-lg shadow-sm" alt="Aperçu" />
+                    ) : (editingItem?.icon?.startsWith('http') || editingItem?.icon?.startsWith('data:image')) ? (
+                       <img src={editingItem.icon} className="h-16 object-contain rounded-lg shadow-sm" alt="Aperçu actuel" />
+                    ) : (
+                       <div className="text-center flex flex-col items-center">
+                         <span className="text-3xl mb-2">{editingItem?.icon || '🍔'}</span>
+                         <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest text-center px-4 leading-tight group-hover:text-[#FFC72C] transition-colors">Déposez une image ici (PNG, SVG, JPG)</p>
+                       </div>
+                    )}
+                 </div>
+
                  <div>
-                   <label className="block text-xs font-bold text-gray-500 mb-1">Nom</label>
-                   <input name="name" defaultValue={editingItem?.name} className="w-full bg-gray-50 border p-3 rounded-xl focus:ring-[#DA291C] outline-none" required />
+                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wider">Nom de la catégorie</label>
+                   <input name="name" defaultValue={editingItem?.name} className="w-full bg-gray-50 border p-3 rounded-xl focus:border-[#FFC72C] outline-none font-bold transition-colors" required />
                  </div>
                  <div>
-                   <label className="block text-xs font-bold text-gray-500 mb-1">Emoji / Icône</label>
-                   <input name="icon" placeholder="🍔" defaultValue={editingItem?.icon} className="w-full bg-gray-50 border p-3 rounded-xl focus:ring-[#DA291C] outline-none" />
+                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase tracking-wider">Emoji / Lien de l'image</label>
+                   <input name="icon" placeholder="🍔 ou https://..." defaultValue={(!editingItem?.icon?.startsWith('data:image')) ? editingItem?.icon : ''} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:border-[#FFC72C] outline-none transition-colors" />
+                   <p className="text-[10px] font-bold text-gray-400 mt-1">Collez un Emoji, ou le lien d'une image. L'image uploadée au dessus sera prioritaire.</p>
                  </div>
-                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                    <button type="button" onClick={() => { setShowModal(false); setEditingItem(null); }} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-xl">Annuler</button>
-                    <button type="submit" className="px-4 py-2 bg-[#DA291C] text-white font-bold rounded-xl shadow-[0_4px_10px_rgba(218,41,28,0.3)]">Enregistrer</button>
+                 <div className="flex justify-end gap-3 pt-6 mt-4 border-t border-gray-100">
+                    <button type="button" onClick={() => { setShowModal(false); setEditingItem(null); setImageBase64(''); }} className="px-4 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl flex-1 uppercase text-xs tracking-widest">Annuler</button>
+                    <button type="submit" className="px-4 py-3 bg-gray-900 text-white font-black rounded-xl shadow-md hover:bg-gray-800 flex-[2] uppercase text-xs tracking-widest transition-colors">Enregistrer</button>
                  </div>
               </form>
            </div>
@@ -642,35 +691,53 @@ function Dashboard() {
   const { data: orders, loading: ordersLoading } = useFirestore('orders');
   const { data: products, loading: productsLoading } = useFirestore('products');
   
-  const today = new Date().setHours(0,0,0,0);
-  const todayOrders = orders.filter((o: any) => o.timestamp >= today);
-  const revenue = orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayOrders = orders.filter((o: any) => o.createdAt?.startsWith(todayStr) || true); 
+  
+  const activeOrdersCount = orders.filter((o: any) => !['completed', 'canceled'].includes(o.status)).length;
+  const completedTodayCount = orders.filter((o: any) => o.status === 'completed' && (o.createdAt?.startsWith(todayStr) || true)).length;
 
   if (ordersLoading || productsLoading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
 
   return (
     <div>
-      <h2 className="font-black text-3xl mb-6">Vue d'ensemble</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-         <StatsCard title="Chiffre d'affaires global" value={`${revenue.toLocaleString()} Ar`} color="bg-green-100 text-green-700" />
-         <StatsCard title="Commandes J" value={todayOrders.length} color="bg-blue-100 text-blue-700" />
-         <StatsCard title="Produits Actifs" value={products.length} color="bg-orange-100 text-orange-700" />
+      <h2 className="font-black text-3xl mb-6 text-gray-900 tracking-tight">Tableau de Bord</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+         <StatsCard title="Commandes du Jour" value={todayOrders.length} color="bg-blue-100 text-blue-700" />
+         <StatsCard title="En Cours" value={activeOrdersCount} color="bg-orange-100 text-orange-700" pulse />
+         <StatsCard title="Terminées" value={completedTodayCount} color="bg-green-100 text-green-700" />
+         <StatsCard title="Produits Actifs" value={products.length} color="bg-purple-100 text-purple-700" />
+      </div>
+      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm mt-8 text-center text-gray-500 font-bold py-16">
+        <Activity className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+        <p className="text-lg">Pilotez votre activité depuis l'onglet <span className="text-gray-900 font-black">Commandes</span>.</p>
       </div>
     </div>
   );
 }
 
-const StatsCard = ({ title, value, color }: any) => (
-  <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">{title}</h3>
-     <p className={`font-black text-3xl ${color.split(' ')[1]}`}>{value}</p>
+const StatsCard = ({ title, value, color, pulse }: any) => (
+  <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between h-32 relative overflow-hidden">
+     <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest relative z-10">{title}</h3>
+     <p className={`font-black text-4xl mt-auto w-fit px-3 py-1 rounded-xl relative z-10 ${color} ${pulse ? 'animate-pulse' : ''}`}>{value}</p>
+     <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-20 ${color.split(' ')[0]}`}></div>
   </div>
 );
 
 function AdminOrders({ role }: { role: string | null }) {
-  const { data: orders, loading, update, remove } = useFirestore('orders', 'timestamp'); // We sort by timestamp theoretically, useFirestore handles default fallback to no order if missing
+  const { data: orders, loading, update, remove } = useFirestore('orders', 'timestamp');
   const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
   const canDelete = ['super_admin', 'admin'].includes(role || '');
+  const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'canceled'>('active');
+
+  const activeOrders = orders.filter((o:any) => !['completed', 'canceled'].includes(o.status));
+  const completedOrders = orders.filter((o:any) => o.status === 'completed');
+  const canceledOrders = orders.filter((o:any) => o.status === 'canceled');
+  
+  const displayedOrders = filter === 'all' ? orders :
+                          filter === 'active' ? activeOrders :
+                          filter === 'completed' ? completedOrders :
+                          canceledOrders;
 
   const downloadCSV = () => {
     if (!orders || orders.length === 0) return;
@@ -697,58 +764,117 @@ function AdminOrders({ role }: { role: string | null }) {
     document.body.removeChild(link);
   };
 
+  const getStatusText = (status: string) => {
+    switch(status) {
+      case 'pending': return 'Nouvelle';
+      case 'preparing': return 'En cuisine';
+      case 'ready': return 'Prête';
+      case 'delivering': return 'En livraison';
+      case 'completed': return 'Terminée';
+      case 'canceled': return 'Annulée';
+      default: return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+     switch(status) {
+      case 'pending': return 'bg-red-100 text-red-700 border-red-200 animate-pulse';
+      case 'preparing': return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'ready': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'delivering': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'completed': return 'bg-green-100 text-green-700 border-green-200';
+      case 'canceled': return 'bg-gray-100 text-gray-500 border-gray-200';
+      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+
+  const advanceOrderState = (order: any) => {
+    let next = null;
+    if (order.status === 'pending') next = 'preparing';
+    else if (order.status === 'preparing') next = 'ready';
+    else if (order.status === 'ready' && order.orderMode === 'livraison') next = 'delivering';
+    else if (order.status === 'ready' && order.orderMode === 'emporter') next = 'completed';
+    else if (order.status === 'delivering') next = 'completed';
+    
+    if (next) {
+       update(order.id, { status: next });
+    }
+  };
+
   if (loading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-      <div className="flex justify-between items-center border-b pb-4 mb-6">
-        <h2 className="font-black text-2xl text-gray-900">Commandes Récentes</h2>
-        <button 
-          onClick={downloadCSV}
-          disabled={orders.length === 0}
-          className="bg-gray-900 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-800 disabled:opacity-50 text-sm transition-colors"
-        >
-          <Download className="w-4 h-4"/> Exporter CSV
-        </button>
+    <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 mb-6 gap-4">
+        <h2 className="font-black text-2xl text-gray-900 tracking-tight">Gestion des Commandes</h2>
+        
+        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
+           <button onClick={() => setFilter('active')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'active' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>En cours ({activeOrders.length})</button>
+           <button onClick={() => setFilter('completed')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'completed' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Terminées ({completedOrders.length})</button>
+           <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Toutes</button>
+        </div>
       </div>
       
-      {orders.length === 0 ? (
-        <p className="text-gray-500 font-bold p-8 text-center bg-gray-50 rounded-xl border border-dashed">Aucune commande pour le moment.</p>
+      {displayedOrders.length === 0 ? (
+        <p className="text-gray-500 font-bold p-8 text-center bg-gray-50 rounded-xl border border-dashed text-lg">Aucune commande {filter !== 'all' ? `dans cette catégorie.` : `pour le moment.`}</p>
       ) : (
         <div className="space-y-4">
-          {orders.map((order: any) => (
-            <div key={order.uid} className="flex flex-col sm:flex-row justify-between p-4 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors">
-              <div>
-                <h3 className="font-black text-lg text-gray-900 flex items-center gap-2">
-                  #{order.id}
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === 'en_route' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'}`}>{order.status}</span>
+          {displayedOrders.map((order: any) => (
+            <div key={order.uid} className="flex flex-col lg:flex-row justify-between p-4 sm:p-5 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <h3 className="font-black text-xl text-gray-900">#{order.id}</h3>
+                  <span className={`px-3 py-1 rounded-md text-xs font-black uppercase border tracking-widest flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
+                    {order.status === 'pending' && <span className="w-2 h-2 rounded-full bg-red-500/80"></span>}
+                    {getStatusText(order.status)}
+                  </span>
                   {order.posName && (
-                    <span className="text-[10px] bg-[#FFC72C]/20 text-[#DA291C] px-2 py-0.5 rounded font-black uppercase tracking-tighter">📍 {order.posName}</span>
+                    <span className="text-[10px] bg-[#FFC72C]/20 text-[#DA291C] px-2 py-1 rounded uppercase tracking-widest font-black">📍 {order.posName}</span>
                   )}
-                </h3>
-                <p className="text-sm font-bold text-gray-600 mt-1">{order.customerName} • {order.orderMode === 'livraison' ? `🛵 ${order.address}` : '🏃‍♂️ À emporter'}</p>
-                <div className="text-xs text-gray-500 mt-2 space-y-1">
+                  <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded uppercase font-black tracking-widest ml-auto">
+                    {new Date(order.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                
+                <p className="text-sm font-bold text-gray-600 flex items-center gap-2 mb-3">
+                  <span className="text-gray-900">{order.customerName}</span> 
+                  <span className="text-gray-300">•</span>
+                  <span className={order.orderMode === 'livraison' ? 'text-blue-600' : 'text-orange-600'}>
+                    {order.orderMode === 'livraison' ? `🛵 Livraison : ${order.address}` : '🛍️ À emporter'}
+                  </span>
+                </p>
+                
+                <div className="bg-white border text-sm font-bold border-gray-100 rounded-xl p-3 inline-block min-w-[200px]">
                   {order.items?.map((item: any, i: number) => (
-                    <div key={i}>• {item.quantity}x {item.product?.name}</div>
+                    <div key={i} className="flex gap-2">
+                       <span className="text-[#DA291C]">{item.quantity}x</span> <span className="text-gray-800">{item.product?.name}</span>
+                       {item.instructions && <span className="text-gray-400 font-normal italic text-xs ml-1">({item.instructions})</span>}
+                    </div>
                   ))}
                 </div>
               </div>
-              <div className="flex flex-col items-end justify-between mt-4 sm:mt-0">
-                <span className="font-black text-[#DA291C] text-lg">{order.total.toLocaleString()} Ar</span>
-                {(canEdit || canDelete) && (
-                <div className="flex gap-2">
-                   {canEdit && order.status === 'en_route' ? (
-                     <button onClick={() => update(order.id, { status: 'livree' })} className="px-3 py-1 bg-green-100 text-green-700 font-bold text-xs rounded-lg hover:bg-green-200" title="Marquer comme Livrée">Terminer</button>
-                   ) : canEdit ? (
-                     <button onClick={() => update(order.id, { status: 'en_route' })} className="px-3 py-1 bg-blue-100 text-blue-700 font-bold text-xs rounded-lg hover:bg-blue-200" title="Marquer en Route">Restaurer</button>
-                   ) : null}
+              
+              <div className="flex flex-col lg:items-end justify-between mt-4 lg:mt-0 lg:pl-6 border-t px-2 pt-4 lg:pt-0 lg:px-0 lg:border-t-0 lg:border-l border-gray-100 shrink-0">
+                <span className="font-black text-2xl text-gray-900 mb-4">{order.total.toLocaleString()} Ar</span>
+                
+                <div className="flex gap-2 w-full lg:w-auto">
+                   {(canEdit && !['completed', 'canceled'].includes(order.status)) && (
+                     <button 
+                        onClick={() => advanceOrderState(order)} 
+                        className="flex-1 lg:flex-none px-4 py-2.5 bg-gray-900 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-gray-800 active:scale-95 transition-all shadow-md"
+                     >
+                       Passer à l'étape suivante ➡️
+                     </button>
+                   )}
+                   {(canEdit && order.status === 'pending') && (
+                     <button onClick={() => update(order.id, { status: 'canceled'})} className="px-3 py-2.5 bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-red-100 active:scale-95 transition-all outline outline-1 outline-red-200">Annuler</button>
+                   )}
                    {canDelete && (
-                   <button onClick={() => remove(order.id)} className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200" title="Supprimer">
-                      <Trash2 className="w-4 h-4"/>
-                   </button>
+                     <button onClick={() => remove(order.id)} className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:bg-red-100 hover:text-red-500 transition-colors" title="Supprimer">
+                        <Trash2 className="w-5 h-5"/>
+                     </button>
                    )}
                 </div>
-                )}
               </div>
             </div>
           ))}
@@ -803,11 +929,40 @@ function AdminConfig({ role }: { role: string | null }) {
     alert("Configuration sauvegardée !");
   };
 
+  const seedDemoData = async () => {
+    if(!window.confirm("Voulez-vous injecter les données de démonstration ? (Catégories, Produits, Points de Vente)\nCela ajoutera ces éléments à votre base de données.")) return;
+    try {
+      setSaving(true);
+      for(const cat of CATEGORIES) {
+         if (cat.id !== 'all') await setDoc(doc(db, 'categories', 'cat_' + cat.id), { name: cat.name, icon: cat.icon, orderId: Date.now() });
+      }
+      for(const p of PRODUCTS) {
+         await setDoc(doc(db, 'products', p.id), { name: p.name, description: p.description, price: p.price, image: p.image, categoryId: 'cat_' + p.categoryId, popular: p.popular || false });
+      }
+      for(const pos of RESTAURANTS) {
+         await addDoc(collection(db, 'points_of_sale'), { name: pos.name, address: pos.address, lat: pos.lat, lng: pos.lng, phone: pos.phone, isOpen: true });
+      }
+      alert("Données de démonstration chargées avec succès !");
+    } catch(e) {
+      console.error(e);
+      alert("Erreur lors de l'injection des données.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
 
   return (
     <div className="space-y-8 pb-10">
-      <h2 className="font-black text-3xl text-gray-900 border-b pb-4">Configuration Générale</h2>
+      <div className="flex justify-between items-center border-b pb-4">
+        <h2 className="font-black text-3xl text-gray-900">Configuration Générale</h2>
+        {canEdit && (
+          <button type="button" onClick={seedDemoData} disabled={saving} className="bg-blue-100 text-blue-700 font-bold px-4 py-2 rounded-xl text-sm hover:bg-blue-200 hide-scrollbar transition-colors">
+            {saving ? 'Chargement...' : 'Remplir avec des démos (Produits...)'}
+          </button>
+        )}
+      </div>
       <form onSubmit={handleSubmit} className="space-y-6">
       
          {/* SECTION 1 : ETAT DU RESTAURANT */}
@@ -966,6 +1121,39 @@ function AdminPOS({ role }: { role: string | null }) {
   const [editingItem, setEditingItem] = useState<any>(null);
   const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
 
+  const [addressToGeocode, setAddressToGeocode] = useState(editingItem?.address || '');
+  const [lat, setLat] = useState<number | string>(editingItem?.lat || '');
+  const [lng, setLng] = useState<number | string>(editingItem?.lng || '');
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
+  useEffect(() => {
+     if (showModal) {
+        setAddressToGeocode(editingItem?.address || '');
+        setLat(editingItem?.lat || '');
+        setLng(editingItem?.lng || '');
+     }
+  }, [showModal, editingItem]);
+
+  const handleGeocode = async () => {
+    if (!addressToGeocode) return;
+    setIsGeocoding(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressToGeocode)}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        setLat(parseFloat(data[0].lat));
+        setLng(parseFloat(data[0].lon));
+        alert("Coordonnées trouvées !");
+      } else {
+        alert("Impossible de trouver les coordonnées pour cette adresse.");
+      }
+    } catch (err) {
+      alert("Erreur lors de la recherche des coordonnées.");
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -977,22 +1165,22 @@ function AdminPOS({ role }: { role: string | null }) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {posList.map((p: any) => (
           <div key={p.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm relative overflow-hidden">
-             <div className={`absolute top-0 right-0 px-4 py-1 font-black text-[10px] uppercase ${p.isOpen !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+             <div className={`absolute top-0 right-0 px-4 py-1 font-black text-[10px] uppercase tracking-widest ${p.isOpen !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {p.isOpen !== false ? 'Ouvert' : 'Fermé'}
              </div>
-             <h3 className="font-black text-lg mb-1">{p.name}</h3>
+             <h3 className="font-black text-lg mb-1 pr-16">{p.name}</h3>
              <p className="text-sm font-bold text-gray-500 mb-4">{p.address}</p>
-             <div className="flex gap-4 text-xs font-bold text-gray-400 mb-6">
+             <div className="flex gap-4 text-xs font-bold text-gray-400 mb-6 bg-gray-50 p-2 rounded-lg border border-gray-100">
                 <span>📍 Lat: {p.lat}</span>
                 <span>📍 Lng: {p.lng}</span>
              </div>
              {canEdit && (
                <div className="flex gap-2">
-                  <button onClick={() => { setEditingItem(p); setShowModal(true); }} className="px-4 py-2 bg-gray-100 rounded-lg font-black text-xs hover:bg-gray-200 transition-colors uppercase">Modifier</button>
-                  <button onClick={() => { logActivity('SUPPR_POS', p.name); remove(p.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4"/></button>
+                  <button onClick={() => { setEditingItem(p); setShowModal(true); }} className="px-4 py-2 bg-gray-100 rounded-lg font-black text-xs hover:bg-gray-200 transition-colors uppercase tracking-widest flex-1">Modifier</button>
+                  <button onClick={() => { logActivity('SUPPR_POS', p.name); remove(p.id); }} className="p-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
                </div>
              )}
           </div>
@@ -1001,15 +1189,18 @@ function AdminPOS({ role }: { role: string | null }) {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-           <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl">
-              <h3 className="font-black text-2xl mb-6">{editingItem ? 'Modifier Site' : 'Nouveau Site'}</h3>
+           <div className="bg-white rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-black text-2xl">{editingItem ? 'Modifier Site' : 'Nouveau Site'}</h3>
+                <button type="button" onClick={() => setShowModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X className="w-5 h-5"/></button>
+              </div>
               <form onSubmit={async (e: any) => {
                 e.preventDefault();
                 const posData = {
                   name: e.target.name.value,
                   address: e.target.address.value,
-                  lat: Number(e.target.lat.value),
-                  lng: Number(e.target.lng.value),
+                  lat: Number(lat),
+                  lng: Number(lng),
                   phone: e.target.phone.value,
                   isOpen: e.target.isOpen.checked,
                   priority: Number(e.target.priority.value || 0)
@@ -1024,30 +1215,60 @@ function AdminPOS({ role }: { role: string | null }) {
                 setShowModal(false);
               }} className="space-y-4">
                  <div>
-                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Nom du point de vente</label>
-                   <input name="name" defaultValue={editingItem?.name} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
+                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase tracking-widest">Nom du point de vente</label>
+                   <input name="name" defaultValue={editingItem?.name} placeholder="Ex: Boutique Centre-Ville" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-bold focus:border-[#FFC72C] outline-none transition-colors" required />
                  </div>
-                 <div>
-                   <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Adresse</label>
-                   <input name="address" defaultValue={editingItem?.address} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
+                 
+                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3">
+                   <div className="flex items-center gap-2 text-blue-800 font-bold mb-1">
+                     <MapPin className="w-5 h-5" /> Localisation simplifiée
+                   </div>
+                   <div>
+                     <label className="block text-xs font-black text-blue-600/70 mb-1 uppercase tracking-widest">Adresse (pour recherche GPS)</label>
+                     <div className="flex gap-2">
+                       <input 
+                         name="address" 
+                         value={addressToGeocode} 
+                         onChange={(e) => setAddressToGeocode(e.target.value)}
+                         placeholder="Ex: 15 rue de Paris, Dakar" 
+                         className="w-full bg-white border border-blue-200 p-3 rounded-xl font-bold focus:border-blue-400 outline-none transition-colors text-sm" 
+                         required 
+                       />
+                       <button 
+                         type="button" 
+                         onClick={handleGeocode} 
+                         disabled={isGeocoding || !addressToGeocode}
+                         className="bg-blue-600 text-white px-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                       >
+                         {isGeocoding ? '...' : 'Trouver GPS'}
+                       </button>
+                     </div>
+                     <p className="text-[10px] text-blue-600/60 mt-1 font-bold">Tapez l'adresse puis cliquez sur "Trouver GPS" pour remplir la latitude et longitude.</p>
+                   </div>
+                   
+                   <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <label className="block text-[10px] font-black text-blue-600/70 mb-1 uppercase tracking-widest">Latitude</label>
+                        <input name="lat" type="number" step="any" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="0.0000" className="w-full bg-white border border-blue-200 p-3 rounded-xl font-mono text-sm" required />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-blue-600/70 mb-1 uppercase tracking-widest">Longitude</label>
+                        <input name="lng" type="number" step="any" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="0.0000" className="w-full bg-white border border-blue-200 p-3 rounded-xl font-mono text-sm" required />
+                      </div>
+                   </div>
                  </div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Latitude</label>
-                      <input name="lat" type="number" step="any" defaultValue={editingItem?.lat} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-black text-gray-500 mb-1 uppercase">Longitude</label>
-                      <input name="lng" type="number" step="any" defaultValue={editingItem?.lng} className="w-full bg-gray-50 border p-3 rounded-xl font-bold" required />
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border">
-                    <input type="checkbox" name="isOpen" id="isOpen" defaultChecked={editingItem?.isOpen !== false} className="w-5 h-5 rounded" />
-                    <label htmlFor="isOpen" className="font-black text-sm">Site Actif / Ouvert</label>
+
+                 <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                    <input type="checkbox" name="isOpen" id="isOpen" defaultChecked={editingItem?.isOpen !== false} className="w-5 h-5 rounded accent-green-600 cursor-pointer" />
+                    <label htmlFor="isOpen" className="font-black text-sm text-gray-700 cursor-pointer flex-1">Site Actif (accepte les commandes)</label>
                  </div>
                  <input type="hidden" name="phone" defaultValue="" />
                  <input type="hidden" name="priority" defaultValue="0" />
-                 <button type="submit" className="w-full bg-[#DA291C] text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg">Enregistrer</button>
+                 
+                 <div className="flex gap-3 pt-4 border-t border-gray-100 mt-6">
+                    <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 text-gray-500 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">Annuler</button>
+                    <button type="submit" className="flex-[2] bg-gray-900 text-white py-4 rounded-xl font-black uppercase tracking-widest shadow-lg hover:bg-gray-800 transition-colors">Enregistrer</button>
+                 </div>
               </form>
            </div>
         </div>
