@@ -13,7 +13,7 @@ import L from 'leaflet';
 // Fix for default marker icons in React Leaflet
 // @ts-ignore
 if (typeof L !== 'undefined' && L.Icon && L.Icon.Default) {
-  delete L.Icon.Default.prototype._getIconUrl;
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
   L.Icon.Default.mergeOptions({
     iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
     iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -295,7 +295,7 @@ export default function App() {
 function Layout({ children }: { children: React.ReactNode }) {
   const { 
     getCartCount, getCartTotal, setIsCartOpen, isCartOpen, 
-    country, setCountry, formatPriceC, whatsappLink, 
+    country, setCountry, formatPriceC, whatsappLink, whatsappNumber,
     cart, activeOrder, globalConfig, globalPOS, 
     selectedPOS, setSelectedPOS, userCoords,
     selectedProduct, setSelectedProduct, lastAdded
