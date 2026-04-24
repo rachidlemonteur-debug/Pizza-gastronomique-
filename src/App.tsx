@@ -711,8 +711,39 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
   const [address, setAddress] = useState('');
   const [addressError, setAddressError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [deliveryCoords, setDeliveryCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   
   const { add: addOrder } = useFirestore('orders'); // Real-time order syncer
+
+  const handleGeolocate = () => {
+    if (!navigator.geolocation) {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+       const lat = position.coords.latitude;
+       const lng = position.coords.longitude;
+       setDeliveryCoords({ lat, lng });
+       try {
+         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+         const data = await res.json();
+         if (data && data.display_name) {
+            setAddress(data.display_name);
+            setAddressError('');
+         }
+       } catch (err) {
+         console.error(err);
+         alert("Position trouvée, mais impossible d'obtenir l'adresse texte.");
+       } finally {
+         setIsLocating(false);
+       }
+    }, (error) => {
+       setIsLocating(false);
+       alert("Impossible d'obtenir votre position. Veuillez entrer l'adresse manuellement.");
+    });
+  };
 
   // Step 3 - Transmission : Simulate server processing, then go to tracking.
   const handleFinalCheckout = async () => {
@@ -748,6 +779,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
        posName: selectedPOS?.name || 'Restaurant inconnu',
        address: address || 'Antananarivo, Centre',
        customerName: customerName || 'Client',
+       deliveryCoords: deliveryCoords,
        etaMinutes: 25,
        timestamp: Date.now()
     };
@@ -874,7 +906,21 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                       className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-bold placeholder-gray-400 outline-none focus:border-[#FFC72C] focus:bg-white transition-colors"
                     />
                     {orderMode === 'livraison' && (
-                      <div>
+                      <div className="space-y-3">
+                        <button 
+                           onClick={handleGeolocate} 
+                           type="button"
+                           disabled={isLocating}
+                           className="w-full flex items-center justify-center gap-2 bg-[#DA291C]/10 text-[#DA291C] hover:bg-[#DA291C]/20 border border-[#DA291C]/20 p-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all"
+                        >
+                           <MapPin className="w-4 h-4" />
+                           {isLocating ? 'Recherche en cours...' : 'Utiliser ma position actuelle'}
+                        </button>
+                        <div className="flex items-center gap-4">
+                           <hr className="flex-1 border-gray-200" />
+                           <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">OU SAISIR</span>
+                           <hr className="flex-1 border-gray-200" />
+                        </div>
                         <input 
                           type="text" 
                           placeholder="Adresse Complète de Livraison*" 

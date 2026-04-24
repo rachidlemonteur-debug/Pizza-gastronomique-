@@ -1,6 +1,6 @@
 {
   "name": "Pizza gastronomique ",
   "description": "",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": []
 }

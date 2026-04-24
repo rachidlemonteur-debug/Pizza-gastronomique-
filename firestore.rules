@@ -87,10 +87,11 @@ service cloud.firestore {
 
     // -- ORDERS --
     function isValidOrder(data) {
-      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName']) &&
+      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords']) &&
              (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
              (!data.keys().hasAny(['total']) || (data.total is number)) &&
              (!data.keys().hasAny(['status']) || (data.status is string)) &&
+             (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
              (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100));
     }
     match /orders/{orderId} {
