@@ -103,11 +103,11 @@ const PRODUCTS = [
 ];
 
 const RESTAURANTS = [
-  { id: 1, country: 'MG', name: "Gastro Analakely", address: "Avenue de l'Indépendance", distance: "0.5 km", status: "Ouvert - Drive 24h/24", phone: "032 07 350 26", type: "Drive & Sur place" },
-  { id: 2, country: 'MG', name: "Gastro Ankorondrano", address: "Galerie Zodiaque", distance: "3.2 km", status: "Ouvert jusqu'à 23h", phone: "032 07 350 27", type: "Sur place & Bornes" },
-  { id: 3, country: 'MG', name: "Gastro Ilafy", address: "Parc commercial", distance: "6.8 km", status: "Ouvert jusqu'à 22h", phone: "032 07 350 28", type: "Drive uniquement" },
-  { id: 4, country: 'SN', name: "Gastro Almadies", address: "Route des Almadies, Dakar", distance: "1.2 km", status: "Ouvert - Drive 24h/24", phone: "77 000 00 00", type: "Drive & Sur place" },
-  { id: 5, country: 'SN', name: "Gastro Plateau", address: "Avenue Pompidou, Dakar", distance: "4.5 km", status: "Ouvert jusqu'à 23h", phone: "77 000 00 01", type: "Sur place & Bornes" }
+  { id: 1, country: 'MG', name: "Gastro Analakely", address: "Avenue de l'Indépendance", distance: "0.5 km", status: "Ouvert - Drive 24h/24", phone: "032 07 350 26", type: "Drive & Sur place", lat: -18.905, lng: 47.525 },
+  { id: 2, country: 'MG', name: "Gastro Ankorondrano", address: "Galerie Zodiaque", distance: "3.2 km", status: "Ouvert jusqu'à 23h", phone: "032 07 350 27", type: "Sur place & Bornes", lat: -18.880, lng: 47.520 },
+  { id: 3, country: 'MG', name: "Gastro Ilafy", address: "Parc commercial", distance: "6.8 km", status: "Ouvert jusqu'à 22h", phone: "032 07 350 28", type: "Drive uniquement", lat: -18.850, lng: 47.560 },
+  { id: 4, country: 'SN', name: "Gastro Almadies", address: "Route des Almadies, Dakar", distance: "1.2 km", status: "Ouvert - Drive 24h/24", phone: "77 000 00 00", type: "Drive & Sur place", lat: 14.748, lng: -17.514 },
+  { id: 5, country: 'SN', name: "Gastro Plateau", address: "Avenue Pompidou, Dakar", distance: "4.5 km", status: "Ouvert jusqu'à 23h", phone: "77 000 00 01", type: "Sur place & Bornes", lat: 14.673, lng: -17.436 }
 ];
 
 const COUNTRIES = {
@@ -223,6 +223,7 @@ export default function App() {
         // Find nearest POS if not already selected manually
         if (!selectedPOS && globalPOS.length > 0) {
           const nearest = [...globalPOS].sort((a, b) => {
+            if (a.lat === undefined || b.lat === undefined) return 0;
             const distA = Math.sqrt(Math.pow(a.lat - coords.lat, 2) + Math.pow(a.lng - coords.lng, 2));
             const distB = Math.sqrt(Math.pow(b.lat - coords.lat, 2) + Math.pow(b.lng - coords.lng, 2));
             return distA - distB;
@@ -649,9 +650,9 @@ function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
   const { globalPOS, selectedPOS, setSelectedPOS, userCoords } = useCart();
   
   const sortedPOS = [...globalPOS].sort((a, b) => {
-    if (!userCoords) return 0;
-    const distA = Math.sqrt(Math.pow((a.lat || 0) - userCoords.lat, 2) + Math.pow((a.lng || 0) - userCoords.lng, 2));
-    const distB = Math.sqrt(Math.pow((b.lat || 0) - userCoords.lat, 2) + Math.pow((b.lng || 0) - userCoords.lng, 2));
+    if (!userCoords || a.lat === undefined || b.lat === undefined) return 0;
+    const distA = Math.sqrt(Math.pow(a.lat - userCoords.lat, 2) + Math.pow(a.lng - userCoords.lng, 2));
+    const distB = Math.sqrt(Math.pow(b.lat - userCoords.lat, 2) + Math.pow(b.lng - userCoords.lng, 2));
     return distA - distB;
   });
 
@@ -667,8 +668,9 @@ function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
               
               <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                 {sortedPOS.map((pos: any, idx: number) => {
-                  const dist = userCoords ? Math.round(Math.sqrt(Math.pow((pos.lat || 0) - userCoords.lat, 2) + Math.pow((pos.lng || 0) - userCoords.lng, 2)) * 111) : null;
-                  const isNearest = idx === 0 && userCoords;
+                  const hasCoords = pos.lat !== undefined && pos.lng !== undefined;
+                  const dist = (userCoords && hasCoords) ? Math.round(Math.sqrt(Math.pow(pos.lat - userCoords.lat, 2) + Math.pow(pos.lng - userCoords.lng, 2)) * 111) : null;
+                  const isNearest = idx === 0 && userCoords && hasCoords;
                   
                   return (
                     <button 
@@ -702,7 +704,7 @@ function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
 
 // --- NEW COMPONENT: CART DRAWER (STEP 2 - VALIDATION) ---
 function CartDrawer({ onClose }: { onClose: () => void }) {
-  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber, globalConfig } = useCart();
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber, globalConfig, selectedPOS } = useCart();
   const navigate = useNavigate();
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('emporter');
   const [customerName, setCustomerName] = useState('');
@@ -721,6 +723,10 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
       alert("Veuillez saisir votre nom pour valider la commande.");
       return;
     }
+    if (!selectedPOS) {
+      alert("Veuillez sélectionner un point de vente avant de commander.");
+      return;
+    }
     if (orderMode === 'livraison' && !address.trim()) {
       setAddressError("Veuillez saisir votre adresse de livraison.");
       return;
@@ -736,6 +742,8 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
        total: getCartTotal(),
        items: [...cart], // clone to keep items
        orderMode: orderMode,
+       posId: selectedPOS?.id?.toString() || 'unknown',
+       posName: selectedPOS?.name || 'Restaurant inconnu',
        address: address || 'Antananarivo, Centre',
        customerName: customerName || 'Client',
        etaMinutes: 25,
@@ -1382,7 +1390,7 @@ function PageRestaurants() {
   const currentCountry = COUNTRIES[country];
   
   const displayRestaurants = globalPOS.filter(r => r.country === country || !r.country);
-  const defaultCenter: [number, number] = userCoords ? [userCoords.lat, userCoords.lng] : (displayRestaurants[0] ? [displayRestaurants[0].lat, displayRestaurants[0].lng] : [-18.8792, 47.5079]);
+  const defaultCenter: [number, number] = userCoords ? [userCoords.lat, userCoords.lng] : (displayRestaurants[0] && displayRestaurants[0].lat !== undefined ? [displayRestaurants[0].lat, displayRestaurants[0].lng] : [-18.8792, 47.5079]);
 
   return (
     <div className="bg-gray-50 min-h-screen pb-24">
@@ -1437,7 +1445,8 @@ function PageRestaurants() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayRestaurants.map(r => {
             const isSelected = selectedPOS?.id === r.id;
-            const dist = userCoords ? Math.round(Math.sqrt(Math.pow(r.lat - userCoords.lat, 2) + Math.pow(r.lng - userCoords.lng, 2)) * 111) : null;
+            const hasCoords = r.lat !== undefined && r.lng !== undefined;
+            const dist = (userCoords && hasCoords) ? Math.round(Math.sqrt(Math.pow(r.lat - userCoords.lat, 2) + Math.pow(r.lng - userCoords.lng, 2)) * 111) : null;
 
             return (
               <div key={r.id} className={`bg-white p-8 rounded-[2.5rem] border-2 transition-all shadow-xl group ${isSelected ? 'border-[#DA291C] ring-4 ring-red-50' : 'border-white hover:border-[#FFC72C]'}`}>

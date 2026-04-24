@@ -61,6 +61,8 @@
           "enum": ["pending", "accepted", "delivering", "completed", "canceled"]
         },
         "orderMode": { "type": "string" },
+        "posId": { "type": "string" },
+        "posName": { "type": "string" },
         "createdAt": { "type": "string" }
       },
       "required": ["customerName", "total", "status"]

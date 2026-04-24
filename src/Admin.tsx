@@ -722,6 +722,9 @@ function AdminOrders({ role }: { role: string | null }) {
                 <h3 className="font-black text-lg text-gray-900 flex items-center gap-2">
                   #{order.id}
                   <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === 'en_route' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'}`}>{order.status}</span>
+                  {order.posName && (
+                    <span className="text-[10px] bg-[#FFC72C]/20 text-[#DA291C] px-2 py-0.5 rounded font-black uppercase tracking-tighter">📍 {order.posName}</span>
+                  )}
                 </h3>
                 <p className="text-sm font-bold text-gray-600 mt-1">{order.customerName} • {order.orderMode === 'livraison' ? `🛵 ${order.address}` : '🏃‍♂️ À emporter'}</p>
                 <div className="text-xs text-gray-500 mt-2 space-y-1">
