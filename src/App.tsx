@@ -9,6 +9,25 @@ import {
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+
+// Fix for default marker icons in React Leaflet
+// @ts-ignore
+if (typeof L !== 'undefined' && L.Icon && L.Icon.Default) {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+}
+
+function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+}
 import AdminApp from './Admin';
 import { useFirestore } from './hooks/useFirestore';
 
@@ -609,6 +628,19 @@ function Layout({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
 
       <POSSelectionModal isOpen={isPOSModalOpen} onClose={() => setIsPOSModalOpen(false)} />
+      
+      {/* STICKY BOTTOM CTAs (Mobile-First Conversion) */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden p-4 bg-white/80 backdrop-blur-xl border-t border-gray-100 flex gap-2">
+         <Link to="/menu" className="flex-1 bg-[#DA291C] text-white py-4 rounded-2xl font-black uppercase text-center text-xs tracking-widest shadow-lg shadow-red-200">
+            Commander
+         </Link>
+         <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="bg-[#25D366] text-white p-4 rounded-2xl shadow-lg shadow-green-100">
+            <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.067 2.877 1.215 3.076.149.198 2.095 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.937 3.659 1.431 5.63 1.432h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+         </a>
+         <a href={`tel:${whatsappNumber}`} className="bg-gray-900 text-white p-4 rounded-2xl shadow-lg shadow-gray-200">
+            <Phone className="w-5 h-5" />
+         </a>
+      </div>
     </div>
   );
 }
@@ -1350,6 +1382,7 @@ function PageRestaurants() {
   const currentCountry = COUNTRIES[country];
   
   const displayRestaurants = globalPOS.filter(r => r.country === country || !r.country);
+  const defaultCenter: [number, number] = userCoords ? [userCoords.lat, userCoords.lng] : (displayRestaurants[0] ? [displayRestaurants[0].lat, displayRestaurants[0].lng] : [-18.8792, 47.5079]);
 
   return (
     <div className="bg-gray-50 min-h-screen pb-24">
@@ -1360,6 +1393,47 @@ function PageRestaurants() {
       </div>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 relative z-20">
+        
+        {/* INTERACTIVE MAP */}
+        <div className="bg-white p-4 rounded-[2.5rem] shadow-xl border-4 border-white h-[400px] mb-10 overflow-hidden relative group">
+           <MapContainer center={defaultCenter} zoom={13} scrollWheelZoom={false} className="w-full h-full rounded-[1.8rem]">
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MapUpdater center={defaultCenter} zoom={userCoords ? 14 : 11} />
+              
+              {userCoords && (
+                <Marker position={[userCoords.lat, userCoords.lng]}>
+                  <Popup className="font-black">Vous êtes ici</Popup>
+                </Marker>
+              )}
+              
+              {displayRestaurants.map(pos => (
+                <Marker key={pos.id} position={[pos.lat, pos.lng]}>
+                  <Popup>
+                    <div className="p-1">
+                       <h4 className="font-black uppercase text-[#DA291C]">{pos.name}</h4>
+                       <p className="text-xs font-bold text-gray-500 m-0">{pos.address}</p>
+                       <button 
+                         onClick={() => setSelectedPOS(pos)}
+                         className="mt-2 w-full bg-gray-900 text-white py-1 px-2 rounded-lg text-[10px] font-black uppercase"
+                       >
+                         Choisir ce point
+                       </button>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+           </MapContainer>
+           {!userCoords && (
+             <div className="absolute top-8 left-8 z-[1000] bg-white/90 backdrop-blur px-4 py-2 rounded-2xl shadow-lg border border-yellow-100 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-orange-500" />
+                <span className="text-[10px] font-black uppercase text-gray-500">Géolocalisation inactive</span>
+             </div>
+           )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayRestaurants.map(r => {
             const isSelected = selectedPOS?.id === r.id;
