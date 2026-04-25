@@ -1725,7 +1725,7 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 
 // --- TRACKING PAGE ---
 function PageTracking() {
-  const { activeOrder, formatPriceC, whatsappNumber, selectedPOS } = useCart();
+  const { activeOrder, formatPriceC, whatsappNumber, selectedPOS, globalConfig } = useCart();
   const navigate = useNavigate();
   const storePos: [number, number] = [selectedPOS?.lat || -18.910012, selectedPOS?.lng || 47.525581];
   const destPos: [number, number] = activeOrder?.orderMode === 'livraison' ? [-18.918000, 47.532000] : storePos;
