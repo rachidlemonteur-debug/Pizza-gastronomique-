@@ -6,7 +6,7 @@ import {
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
   Download, UploadCloud, ShieldAlert, Star, Activity, MapPin, FileText, Phone
 } from 'lucide-react';
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { PRODUCTS, CATEGORIES, RESTAURANTS } from './App';
 import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -61,6 +61,7 @@ export default function AdminApp() {
             await setDoc(userRef, { email: u.email, role: 'super_admin' });
             setRole('super_admin');
           } else {
+            await setDoc(userRef, { email: u.email, role: 'viewer' });
             setRole('viewer'); // default safe fallback
           }
         } catch (e) {
@@ -578,6 +579,22 @@ function AdminLogin() {
     setLoading(false);
   };
 
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      setError('Veuillez entrer votre adresse e-mail pour réinitialiser le mot de passe.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      alert('Un email de réinitialisation a été envoyé à ' + email);
+    } catch (err: any) {
+      setError(`Erreur lors de la réinitialisation: ${err.message || err.code}`);
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 pb-20 p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
@@ -659,6 +676,17 @@ function AdminLogin() {
           >
             {loading ? 'Traitement...' : (isRegistering ? 'S\'inscrire' : 'Se connecter')}
           </button>
+          {!isRegistering && (
+             <div className="text-right mt-2">
+                <button 
+                  type="button" 
+                  onClick={handlePasswordReset}
+                  className="text-xs font-bold text-gray-500 hover:text-[#DA291C] transition-colors"
+                >
+                  Mot de passe oublié ?
+                </button>
+             </div>
+          )}
         </form>
       )}
 

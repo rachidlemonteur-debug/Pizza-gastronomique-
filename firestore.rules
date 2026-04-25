@@ -13,10 +13,12 @@ service cloud.firestore {
       let udoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return udoc != null ? udoc.data.role : null;
     }
-    function isSuperAdmin() { return isSignedIn() && getUserRole() == 'super_admin'; }
-    function isAdmin() { return isSignedIn() && getUserRole() in ['super_admin', 'admin']; }
-    function isEditor() { return isSignedIn() && getUserRole() in ['super_admin', 'admin', 'editor']; }
-    function isViewer() { return isSignedIn() && getUserRole() in ['super_admin', 'admin', 'editor', 'viewer']; }
+    function isSuperAdmin() { 
+       return isSignedIn() && (getUserRole() == 'super_admin' || request.auth.token.email == 'beidoufadimatou1998@gmail.com'); 
+    }
+    function isAdmin() { return isSignedIn() && (getUserRole() in ['super_admin', 'admin'] || request.auth.token.email == 'beidoufadimatou1998@gmail.com'); }
+    function isEditor() { return isSignedIn() && (getUserRole() in ['super_admin', 'admin', 'editor'] || request.auth.token.email == 'beidoufadimatou1998@gmail.com'); }
+    function isViewer() { return isSignedIn() && (getUserRole() in ['super_admin', 'admin', 'editor', 'viewer'] || request.auth.token.email == 'beidoufadimatou1998@gmail.com'); }
 
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
@@ -42,7 +44,7 @@ service cloud.firestore {
 
     // -- CONFIG --
     function isValidConfig(data) {
-      return data.keys().hasOnly(['brandName', 'heroTitle1', 'heroTitle2', 'heroSubtitle', 'whatsappNumber', 'deliveryFee', 'seoTitle', 'seoDesc', 'promoActive', 'promoText', 'isRestaurantOpen']) &&
+      return data.keys().hasOnly(['brandName', 'heroTitle1', 'heroTitle2', 'heroSubtitle', 'whatsappNumber', 'deliveryFee', 'seoTitle', 'seoDesc', 'promoActive', 'promoText', 'isRestaurantOpen', 'customStatuses']) &&
              (!data.keys().hasAny(['brandName']) || (data.brandName is string && data.brandName.size() <= 100)) &&
              (!data.keys().hasAny(['promoActive']) || (data.promoActive is bool)) &&
              (!data.keys().hasAny(['isRestaurantOpen']) || (data.isRestaurantOpen is bool)) &&
@@ -87,11 +89,12 @@ service cloud.firestore {
 
     // -- ORDERS --
     function isValidOrder(data) {
-      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords']) &&
+      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation']) &&
              (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
              (!data.keys().hasAny(['total']) || (data.total is number)) &&
              (!data.keys().hasAny(['status']) || (data.status is string)) &&
              (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
+             (!data.keys().hasAny(['driverLocation']) || (data.driverLocation is map)) &&
              (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100));
     }
     match /orders/{orderId} {
@@ -101,7 +104,7 @@ service cloud.firestore {
       allow create: if isValidOrder(incoming()) && incoming().keys().hasAll(['customerName', 'total', 'status']);
       
       // Editor can update, mostly status
-      allow update: if isValidOrder(incoming()) && (isAdmin() || (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status'])));
+      allow update: if isValidOrder(incoming()) && (isAdmin() || (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation'])));
       
       allow delete: if isAdmin();
     }

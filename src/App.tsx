@@ -32,6 +32,7 @@ function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }
 }
 import AdminApp from './Admin';
 import { useFirestore } from './hooks/useFirestore';
+import { PagePrivacy, PageTerms, PageCookies, PageDelivery, PageAbout } from './LegalPages';
 
 // --- ROBUST API SIMULATION UTILITY ---
 const simulateApiCall = <T,>(data: T, failureRate: number = 0.3, delay: number = 800): Promise<T> => {
@@ -173,6 +174,11 @@ const AppWithRouter = () => {
                 <Route path="/restaurants" element={<PageRestaurants />} />
                 <Route path="/tracking" element={<PageTracking />} />
                 <Route path="/recrutement" element={<PageRecrutement />} />
+                <Route path="/politique-de-confidentialite" element={<PagePrivacy />} />
+                <Route path="/conditions-utilisation" element={<PageTerms />} />
+                <Route path="/politique-cookies" element={<PageCookies />} />
+                <Route path="/politique-livraison" element={<PageDelivery />} />
+                <Route path="/a-propos" element={<PageAbout />} />
               </Routes>
             </Layout>
           } />
@@ -226,32 +232,35 @@ export default function App() {
   const globalConfig = globalConfigData.length > 0 ? globalConfigData[0] : null;
   const globalPOS = globalPOSData;
 
-  // Geolocation & Nearest POS logic
+  // Find nearest POS if not already selected manually when both coords and pos data are available
+  useEffect(() => {
+    if (!selectedPOS && globalPOS?.length > 0) {
+       if (userCoords) {
+         const nearest = [...globalPOS].sort((a, b) => {
+           if (a.lat === undefined || b.lat === undefined) return 0;
+           const distA = Math.sqrt(Math.pow(a.lat - userCoords.lat, 2) + Math.pow(a.lng - userCoords.lng, 2));
+           const distB = Math.sqrt(Math.pow(b.lat - userCoords.lat, 2) + Math.pow(b.lng - userCoords.lng, 2));
+           return distA - distB;
+         })[0];
+         if (nearest) setSelectedPOS(nearest);
+       } else {
+         // Fallback to highest priority/first POS if no location yet
+         setSelectedPOS(globalPOS[0]);
+       }
+    }
+  }, [userCoords, selectedPOS, globalPOS]);
+
+  // Read location
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition((position) => {
         const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
         setUserCoords(coords);
-        
-        // Find nearest POS if not already selected manually
-        if (!selectedPOS && globalPOS.length > 0) {
-          const nearest = [...globalPOS].sort((a, b) => {
-            if (a.lat === undefined || b.lat === undefined) return 0;
-            const distA = Math.sqrt(Math.pow(a.lat - coords.lat, 2) + Math.pow(a.lng - coords.lng, 2));
-            const distB = Math.sqrt(Math.pow(b.lat - coords.lat, 2) + Math.pow(b.lng - coords.lng, 2));
-            return distA - distB;
-          })[0];
-          setSelectedPOS(nearest);
-        }
       }, (err) => {
         console.warn("Geolocation permission denied", err);
-        // Fallback to highest priority/first POS if permission denied and none selected
-        if (!selectedPOS && globalPOS.length > 0) {
-          setSelectedPOS(globalPOS[0]);
-        }
       });
     }
-  }, [globalPOS.length]);
+  }, []);
 
   // Sync activeOrder in real-time
   useEffect(() => {
@@ -533,6 +542,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             <div>
                <h4 className="font-black text-xl mb-6 text-white">L'Entreprise</h4>
                <ul className="space-y-4 font-bold text-gray-400">
+                 <li><Link to="/a-propos" className="hover:text-white transition-colors">À Propos de nous</Link></li>
                  <li><Link to="/restaurants" className="hover:text-white transition-colors">Localiser un Drive</Link></li>
                  <li><Link to="/recrutement" className="hover:text-white transition-colors">Recrutement</Link></li>
                  <li><Link to="/admin" className="hover:text-[#FFC72C] transition-colors">Staff / Admin</Link></li>
@@ -555,6 +565,15 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
+         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-8 border-t border-gray-800 text-center text-gray-500 font-bold text-sm">
+           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mb-4">
+              <Link to="/politique-de-confidentialite" className="hover:text-white transition-colors">Politique de confidentialité</Link>
+              <Link to="/conditions-utilisation" className="hover:text-white transition-colors">CGV & CGU</Link>
+              <Link to="/politique-cookies" className="hover:text-white transition-colors">Cookies</Link>
+              <Link to="/politique-livraison" className="hover:text-white transition-colors">Politique de livraison</Link>
+           </div>
+           <p>© {new Date().getFullYear()} La Gastronomie Pizza. Tous droits réservés.</p>
+         </div>
       </footer>
 
       {/* STEP 2 : THE REAL CART DRAWER (VALIDATION) */}
@@ -804,7 +823,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
        initialStatus = globalConfig.customStatuses[0].id;
     }
 
-    const newOrderData = {
+    const newOrderData: any = {
        id: generatedId, // Keep for old apps
        orderNumber: generatedId,
        status: initialStatus,
@@ -815,10 +834,11 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
        posName: selectedPOS?.name || 'Restaurant inconnu',
        address: address || 'Antananarivo, Centre',
        customerName: customerName || 'Client',
-       deliveryCoords: deliveryCoords,
        etaMinutes: 25,
        timestamp: Date.now()
     };
+    if (deliveryCoords) newOrderData.deliveryCoords = deliveryCoords;
+    if (isLoggedIn && auth.currentUser) newOrderData.userId = auth.currentUser.uid;
     
     // Add to Firestore
     try {
@@ -1971,12 +1991,12 @@ function PageTracking() {
                 </div>
                 <div className="flex justify-between items-center mb-4">
                    <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Livraison</p>
-                   <p className="font-black text-gray-700">{activeOrder.orderMode === 'livraison' ? formatPriceC(2000) : '0 Fcfa'}</p>
+                   <p className="font-black text-gray-700">{activeOrder.orderMode === 'livraison' ? formatPriceC(globalConfig?.deliveryFee || 0) : formatPriceC(0)}</p>
                 </div>
                 
                 <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
                    <p className="font-black text-gray-400 uppercase tracking-widest text-sm">Total payé</p>
-                   <p className="font-black text-3xl text-gray-900">{formatPriceC(activeOrder.total + (activeOrder.orderMode === 'livraison' ? 2000 : 0))}</p>
+                   <p className="font-black text-3xl text-gray-900">{formatPriceC(activeOrder.total + (activeOrder.orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0))}</p>
                 </div>
              </div>
            </div>
