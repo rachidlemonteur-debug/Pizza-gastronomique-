@@ -268,7 +268,12 @@ export default function App() {
     const docRef = doc(db, 'orders', activeOrder.id);
     const unsubscribe = onSnapshot(docRef, (snapshot) => {
         if (snapshot.exists()) {
-            setActiveOrder({ ...snapshot.data(), id: snapshot.id });
+            const serverData = snapshot.data();
+            setActiveOrder((prev: any) => ({
+                ...prev,
+                ...serverData,
+                id: snapshot.id
+            }));
         }
     }, (err) => {
         console.error("Tracking order error:", err);
@@ -843,20 +848,18 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     // Add to Firestore
     try {
       const orderId = await addOrder(newOrderData);
-      newOrderData.id = orderId;
-    } catch (e) {
-      console.error("Firebase err:", e);
-    }
-    
-    setTimeout(() => {
-      // KEEP LOCAL COPY FOR TRACKING
-      setActiveOrder(newOrderData);
-
+      const finalOrder = { ...newOrderData, id: orderId };
+      setActiveOrder(finalOrder);
+      
       clearCart();
       setIsProcessing(false);
       onClose();
       navigate('/tracking');
-    }, 2000); // Premium smooth 2s loading
+    } catch (e) {
+      console.error("Firebase err:", e);
+      setIsProcessing(false);
+      alert("Erreur lors de l'envoi de la commande. Veuillez réessayer.");
+    }
   };
 
   return (
