@@ -4,7 +4,7 @@ import {
   BarChart as BarChartIcon, Settings, ShoppingBag, List, Users, 
   LogOut, Plus, Trash2, Edit, Save, X, Eye, 
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
-  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin
+  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin, FileText, Phone
 } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { PRODUCTS, CATEGORIES, RESTAURANTS } from './App';
@@ -97,6 +97,9 @@ export default function AdminApp() {
     { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
+    { name: 'Promos & Bannières', path: '/admin/promos', icon: <Star className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
+    { name: 'Contenu (CMS)', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
+    { name: 'Statuts Commandes', path: '/admin/statuses', icon: <Activity className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Configuration', path: '/admin/config', icon: <Settings className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
     { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, allow: ['super_admin'] },
     { name: 'Logs d\'Activité', path: '/admin/logs', icon: <Lock className="w-5 h-5"/>, allow: ['super_admin'] },
@@ -172,6 +175,9 @@ export default function AdminApp() {
              <Route path="/categories" element={<AdminCategories role={role} />} />
              <Route path="/pos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPOS role={role} /> : <NoAccess />} />
              <Route path="/reviews" element={<AdminReviews role={role} />} />
+             <Route path="/promos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPromos role={role} /> : <NoAccess />} />
+             <Route path="/cms" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminCMS role={role} /> : <NoAccess />} />
+             <Route path="/statuses" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminOrderStatuses role={role} /> : <NoAccess />} />
              <Route path="/config" element={['super_admin', 'admin'].includes(role!) ? <AdminConfig role={role} /> : <NoAccess />} />
              <Route path="/users" element={role === 'super_admin' ? <AdminUsers /> : <NoAccess />} />
              <Route path="/logs" element={role === 'super_admin' ? <AdminLogs /> : <NoAccess />} />
@@ -690,7 +696,16 @@ function AdminLogin() {
   );
 }
 
-function Dashboard() {
+function Dashboard({ role }: { role: string | null }) {
+  const { data: configs } = useFirestore('config', 'brandName');
+  const config = configs[0] || {};
+  const customStatuses = config.customStatuses || [
+    { id: 'completed', isTerminal: true, isCanceled: false },
+    { id: 'canceled', isTerminal: true, isCanceled: true }
+  ];
+  const terminalIds = customStatuses.filter((s:any) => s.isTerminal).map((s:any) => s.id);
+  const canceledIds = customStatuses.filter((s:any) => s.isCanceled).map((s:any) => s.id);
+
   const { data: orders, loading: ordersLoading } = useFirestore('orders', 'timestamp');
   const { data: products, loading: productsLoading } = useFirestore('products');
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('week');
@@ -708,8 +723,8 @@ function Dashboard() {
     return isAfter(orderDate, startOfMonth(today));
   });
 
-  const activeOrdersCount = orders.filter((o: any) => !['completed', 'canceled'].includes(o.status)).length;
-  const completedCount = filteredOrders.filter((o: any) => o.status === 'completed').length;
+  const activeOrdersCount = orders.filter((o: any) => !terminalIds.includes(o.status)).length;
+  const completedCount = filteredOrders.filter((o: any) => terminalIds.includes(o.status) && !canceledIds.includes(o.status)).length;
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
 
   // Peak Hours Math
@@ -811,14 +826,29 @@ const StatsCard = ({ title, value, color, pulse }: any) => (
 );
 
 function AdminOrders({ role }: { role: string | null }) {
+  const { data: configs } = useFirestore('config', 'brandName');
+  const config = configs[0] || {};
+  const customStatuses = config.customStatuses || [
+    { id: 'pending', label: 'Nouvelle', color: 'bg-red-100 text-red-700 border-red-200', isTerminal: false, isCanceled: false },
+    { id: 'preparing', label: 'En cuisine', color: 'bg-orange-100 text-orange-700 border-orange-200', isTerminal: false, isCanceled: false },
+    { id: 'ready', label: 'Prête', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', isTerminal: false, isCanceled: false },
+    { id: 'delivering', label: 'En livraison', color: 'bg-blue-100 text-blue-700 border-blue-200', isTerminal: false, isCanceled: false },
+    { id: 'completed', label: 'Terminée', color: 'bg-green-100 text-green-700 border-green-200', isTerminal: true, isCanceled: false },
+    { id: 'canceled', label: 'Annulée', color: 'bg-gray-100 text-gray-500 border-gray-200', isTerminal: true, isCanceled: true }
+  ];
+
+  const terminalIds = customStatuses.filter((s:any) => s.isTerminal).map((s:any) => s.id);
+  const canceledIds = customStatuses.filter((s:any) => s.isCanceled).map((s:any) => s.id);
+  const initialId = customStatuses[0]?.id || 'pending';
+
   const { data: orders, loading, update, remove } = useFirestore('orders', 'timestamp');
   const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
   const canDelete = ['super_admin', 'admin'].includes(role || '');
   const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'canceled'>('active');
 
-  const activeOrders = orders.filter((o:any) => !['completed', 'canceled'].includes(o.status));
-  const completedOrders = orders.filter((o:any) => o.status === 'completed');
-  const canceledOrders = orders.filter((o:any) => o.status === 'canceled');
+  const activeOrders = orders.filter((o:any) => !terminalIds.includes(o.status));
+  const completedOrders = orders.filter((o:any) => terminalIds.includes(o.status) && !canceledIds.includes(o.status));
+  const canceledOrders = orders.filter((o:any) => canceledIds.includes(o.status));
   
   const displayedOrders = filter === 'all' ? orders :
                           filter === 'active' ? activeOrders :
@@ -835,8 +865,10 @@ function AdminOrders({ role }: { role: string | null }) {
     orders.forEach((order: any) => {
        const dateStr = new Date(order.timestamp).toLocaleString('fr-FR');
        const itemsStr = order.items?.map((item: any) => `${item.quantity}x ${item.product.name}`).join('; ') || '';
+       const statusObj = customStatuses.find((s:any) => s.id === order.status);
+       const statusLabel = statusObj ? statusObj.label : order.status;
        // Escape double quotes inside strings
-       const row = `"${order.orderNumber || order.id}","${dateStr}","${order.customerName}","${order.orderMode}","${order.status}","${order.total}","${itemsStr}"`;
+       const row = `"${order.orderNumber || order.id}","${dateStr}","${order.customerName}","${order.orderMode}","${statusLabel}","${order.total}","${itemsStr}"`;
        csvContent += row + "\n";
     });
 
@@ -850,40 +882,26 @@ function AdminOrders({ role }: { role: string | null }) {
     document.body.removeChild(link);
   };
 
-  const getStatusText = (status: string) => {
-    switch(status) {
-      case 'pending': return 'Nouvelle';
-      case 'preparing': return 'En cuisine';
-      case 'ready': return 'Prête';
-      case 'delivering': return 'En livraison';
-      case 'completed': return 'Terminée';
-      case 'canceled': return 'Annulée';
-      default: return status;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-     switch(status) {
-      case 'pending': return 'bg-red-100 text-red-700 border-red-200 animate-pulse';
-      case 'preparing': return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'ready': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'delivering': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'completed': return 'bg-green-100 text-green-700 border-green-200';
-      case 'canceled': return 'bg-gray-100 text-gray-500 border-gray-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
+  const getStatusObj = (statusId: string) => {
+     return customStatuses.find((s:any) => s.id === statusId) || { label: statusId, color: 'bg-gray-100 text-gray-700 border-gray-200' };
   };
 
   const advanceOrderState = (order: any) => {
-    let next = null;
-    if (order.status === 'pending') next = 'preparing';
-    else if (order.status === 'preparing') next = 'ready';
-    else if (order.status === 'ready' && order.orderMode === 'livraison') next = 'delivering';
-    else if (order.status === 'ready' && order.orderMode === 'emporter') next = 'completed';
-    else if (order.status === 'delivering') next = 'completed';
-    
-    if (next) {
-       update(order.id, { status: next });
+    const currentIndex = customStatuses.findIndex((s:any) => s.id === order.status);
+    if (currentIndex >= 0 && currentIndex < customStatuses.length - 1) {
+       let nextIndex = currentIndex + 1;
+       // Skip delivering if mode is emporter
+       if (order.orderMode === 'emporter' && customStatuses[nextIndex]?.id === 'delivering') {
+           nextIndex++;
+       }
+       // If next is valid and not already terminal (unless they specifically want to go back? usually we don't go back here, and advance doesn't bypass terminal unless it's part of the flow)
+       // Let's just blindly go to nextIndex as long as it exists and is not canceled
+       while (nextIndex < customStatuses.length && customStatuses[nextIndex].isCanceled) {
+           nextIndex++;
+       }
+       if (nextIndex < customStatuses.length) {
+          update(order.id, { status: customStatuses[nextIndex].id });
+       }
     }
   };
 
@@ -897,7 +915,9 @@ function AdminOrders({ role }: { role: string | null }) {
         <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
            <button onClick={() => setFilter('active')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'active' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>En cours ({activeOrders.length})</button>
            <button onClick={() => setFilter('completed')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'completed' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Terminées ({completedOrders.length})</button>
+           <button onClick={() => setFilter('canceled')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'canceled' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Annulées ({canceledOrders.length})</button>
            <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap transition-colors ${filter === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Toutes</button>
+           <button onClick={downloadCSV} className="px-4 py-2 rounded-xl bg-green-50 text-green-700 font-bold hover:bg-green-100 whitespace-nowrap text-sm flex items-center gap-2"><Download className="w-4 h-4"/> CSV</button>
         </div>
       </div>
       
@@ -905,14 +925,16 @@ function AdminOrders({ role }: { role: string | null }) {
         <p className="text-gray-500 font-bold p-8 text-center bg-gray-50 rounded-xl border border-dashed text-lg">Aucune commande {filter !== 'all' ? `dans cette catégorie.` : `pour le moment.`}</p>
       ) : (
         <div className="space-y-4">
-          {displayedOrders.map((order: any) => (
+          {displayedOrders.map((order: any) => {
+            const statusObj = getStatusObj(order.status);
+            return (
             <div key={order.id} className="flex flex-col lg:flex-row justify-between p-4 sm:p-5 border border-gray-100 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h3 className="font-black text-xl text-gray-900">#{order.orderNumber || order.id}</h3>
-                  <span className={`px-3 py-1 rounded-md text-xs font-black uppercase border tracking-widest flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
-                    {order.status === 'pending' && <span className="w-2 h-2 rounded-full bg-red-500/80"></span>}
-                    {getStatusText(order.status)}
+                  <span className={`px-3 py-1 rounded-md text-xs font-black uppercase border tracking-widest flex items-center gap-1.5 ${statusObj.color}`}>
+                    {order.status === initialId && <span className="w-2 h-2 rounded-full bg-red-500/80 animate-pulse"></span>}
+                    {statusObj.label}
                   </span>
                   {order.posName && (
                     <span className="text-[10px] bg-[#FFC72C]/20 text-[#DA291C] px-2 py-1 rounded uppercase tracking-widest font-black">📍 {order.posName}</span>
@@ -944,7 +966,7 @@ function AdminOrders({ role }: { role: string | null }) {
                 <span className="font-black text-2xl text-gray-900 mb-4">{order.total.toLocaleString()} Ar</span>
                 
                 <div className="flex gap-2 w-full lg:w-auto">
-                   {(canEdit && !['completed', 'canceled'].includes(order.status)) && (
+                   {(canEdit && !terminalIds.includes(order.status) && order.status !== canceledIds[0]) && (
                      <button 
                         onClick={() => advanceOrderState(order)} 
                         className="flex-1 lg:flex-none px-4 py-2.5 bg-gray-900 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-gray-800 active:scale-95 transition-all shadow-md"
@@ -952,7 +974,7 @@ function AdminOrders({ role }: { role: string | null }) {
                        Passer à l'étape suivante ➡️
                      </button>
                    )}
-                   {(canEdit && order.status === 'delivering') && (
+                   {(canEdit && order.status === (customStatuses.find((s:any) => s.label.toLowerCase().includes('livraison') || s.id.includes('deliver'))?.id || 'delivering')) && (
                      <button 
                        onClick={() => update(order.id, { driverLocation: { lat: -18.910012 + Math.random() * 0.01, lng: 47.525581 + Math.random() * 0.01 } })} 
                        className="px-3 py-2.5 bg-blue-50 text-blue-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-100 active:scale-95 transition-all outline outline-1 outline-blue-200"
@@ -960,8 +982,8 @@ function AdminOrders({ role }: { role: string | null }) {
                        Simuler position
                      </button>
                    )}
-                   {(canEdit && order.status === 'pending') && (
-                     <button onClick={() => update(order.id, { status: 'canceled'})} className="px-3 py-2.5 bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-red-100 active:scale-95 transition-all outline outline-1 outline-red-200">Annuler</button>
+                   {(canEdit && !terminalIds.includes(order.status) && canceledIds.length > 0) && (
+                     <button onClick={() => update(order.id, { status: canceledIds[0]})} className="px-3 py-2.5 bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-red-100 active:scale-95 transition-all outline outline-1 outline-red-200">Annuler</button>
                    )}
                    {canDelete && (
                      <button onClick={() => remove(order.id)} className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:bg-red-100 hover:text-red-500 transition-colors" title="Supprimer">
@@ -971,12 +993,306 @@ function AdminOrders({ role }: { role: string | null }) {
                 </div>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>
   );
 }
+
+function AdminPromos({ role }: { role: string | null }) {
+  const { data: promos, loading, add, update, remove } = useFirestore('promos');
+  const [showModal, setShowModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="font-black text-2xl text-gray-900">Promotions & Bannières</h2>
+        {canEdit && (
+          <button onClick={() => { setEditingItem(null); setShowModal(true); }} className="bg-[#DA291C] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+            <Plus className="w-4 h-4"/> Ajouter Promo
+          </button>
+        )}
+      </div>
+
+      {loading ? <div className="h-32 bg-gray-100 rounded-xl animate-pulse"></div> : (
+        <div className="space-y-4">
+          {promos.map((p: any) => (
+             <div key={p.id} className="bg-white border border-gray-200 rounded-2xl p-4 flex gap-4 items-center">
+                <div className="flex-1">
+                  <h3 className="font-black text-lg">{p.title}</h3>
+                  <p className="text-gray-500 text-sm mt-1">{p.description}</p>
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                     <button onClick={() => update(p.id, { isActive: !p.isActive })} className={`px-3 py-1 rounded-full text-xs font-bold ${p.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>{p.isActive ? 'Actif' : 'Inactif'}</button>
+                     <button onClick={() => { setEditingItem(p); setShowModal(true); }} className="text-blue-500 font-bold text-sm px-3 mx-2">Modifier</button>
+                     <button onClick={() => remove(p.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                  </div>
+                )}
+             </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6">
+            <h3 className="font-black text-2xl mb-6 text-gray-900">{editingItem ? 'Modifier' : 'Ajouter'}</h3>
+            <form onSubmit={(e: any) => {
+               e.preventDefault();
+               const payload = {
+                 title: e.target.title.value,
+                 description: e.target.description.value,
+                 isActive: e.target.isActive.checked
+               };
+               if (editingItem) update(editingItem.id, payload);
+               else add(payload);
+               setShowModal(false);
+            }} className="space-y-4">
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Titre</label>
+                  <input name="title" defaultValue={editingItem?.title} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" placeholder="Promo Été..." />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Description courte</label>
+                  <textarea name="description" defaultValue={editingItem?.description} required rows={3} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]"></textarea>
+               </div>
+               <div className="flex items-center gap-3 py-2">
+                 <input type="checkbox" name="isActive" defaultChecked={editingItem?.isActive ?? true} className="w-5 h-5 accent-[#DA291C] cursor-pointer" />
+                 <span className="font-bold text-sm">Afficher sur l'accueil</span>
+               </div>
+               <button type="submit" className="w-full bg-gray-900 text-white font-black uppercase text-sm py-4 rounded-xl mt-4">Enregistrer</button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminCMS({ role }: { role: string | null }) {
+  const { data: pages, loading, add, update, remove } = useFirestore('page_content');
+  const [showModal, setShowModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="font-black text-2xl text-gray-900">CMS / Pages Statiques</h2>
+        {canEdit && (
+          <button onClick={() => { setEditingItem({ pageKey: '', sections: [] }); setShowModal(true); }} className="bg-[#DA291C] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+            <Plus className="w-4 h-4"/> Ajouter Contenu
+          </button>
+        )}
+      </div>
+
+      {loading ? <div className="h-32 bg-gray-100 rounded-xl animate-pulse"></div> : (
+        <div className="space-y-4">
+          {pages.map((p: any) => (
+             <div key={p.id} className="bg-white border border-gray-200 rounded-2xl p-4 flex gap-4 items-center">
+                <div className="flex-1">
+                  <h3 className="font-black text-lg">{p.pageKey}</h3>
+                  <p className="text-gray-500 text-sm mt-1">{p.sections?.length || 0} sections actives</p>
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                     <button onClick={() => { setEditingItem(p); setShowModal(true); }} className="text-blue-500 font-bold text-sm px-3 mx-2">Éditer le contenu</button>
+                     <button onClick={() => remove(p.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-5 h-5"/></button>
+                  </div>
+                )}
+             </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6">
+            <h3 className="font-black text-2xl mb-6 text-gray-900">Éditeur de Page JSON</h3>
+            <form onSubmit={(e: any) => {
+               e.preventDefault();
+               try {
+                 const sectionsData = JSON.parse(e.target.sections.value);
+                 const payload = {
+                   pageKey: e.target.pageKey.value,
+                   sections: sectionsData
+                 };
+                 if (editingItem?.id) update(editingItem.id, payload);
+                 else add(payload);
+                 setShowModal(false);
+               } catch (err) {
+                 alert("Erreur de syntaxe JSON. Veuillez corriger avant d'enregistrer.");
+               }
+            }} className="space-y-4">
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Clé de page (ex: 'about', 'faq')</label>
+                  <input name="pageKey" defaultValue={editingItem?.pageKey} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" placeholder="home-hero..." />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Contenu (Format JSON strict)</label>
+                  <textarea name="sections" defaultValue={JSON.stringify(editingItem?.sections || [], null, 2)} required rows={10} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C] font-mono text-xs"></textarea>
+               </div>
+               <button type="submit" className="w-full bg-gray-900 text-white font-black uppercase text-sm py-4 rounded-xl mt-4">Enregistrer la structure JSON</button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function AdminOrderStatuses({ role }: { role: string | null }) {
+  const { data: configs, loading, update, add } = useFirestore('config', 'brandName');
+  const [showModal, setShowModal] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+
+  const config = configs[0] || {};
+  const statuses = config.customStatuses || [
+    { id: 'pending', label: 'Nouvelle', customerLabel: 'Commande reçue, en attente...', color: 'bg-red-100 text-red-700', isTerminal: false, isCanceled: false },
+    { id: 'preparing', label: 'En cuisine', customerLabel: 'Vos plats sont en cours de préparation en cuisine !', color: 'bg-orange-100 text-orange-700', isTerminal: false, isCanceled: false },
+    { id: 'ready', label: 'Prête', customerLabel: 'Commande prête !', color: 'bg-yellow-100 text-yellow-700', isTerminal: false, isCanceled: false },
+    { id: 'delivering', label: 'En livraison', customerLabel: 'Le livreur est en route vers chez vous !', color: 'bg-blue-100 text-blue-700', isTerminal: false, isCanceled: false },
+    { id: 'completed', label: 'Terminée', customerLabel: 'Commande terminée !', color: 'bg-green-100 text-green-700', isTerminal: true, isCanceled: false },
+    { id: 'canceled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCanceled: true }
+  ];
+
+  const handleSaveStatus = async (e: any) => {
+     e.preventDefault();
+     const newStatus = {
+        id: e.target.sid.value.toLowerCase().replace(/[\s\W]+/g, '_'),
+        label: e.target.label.value,
+        customerLabel: e.target.customerLabel.value,
+        color: e.target.color.value,
+        isTerminal: e.target.isTerminal.checked,
+        isCanceled: e.target.isCanceled.checked
+     };
+
+     let newStatuses = [...statuses];
+     if (editingIndex !== null) {
+        newStatuses[editingIndex] = newStatus;
+     } else {
+        newStatuses.push(newStatus);
+     }
+
+     if (config.id) {
+       await update(config.id, { customStatuses: newStatuses });
+     } else {
+       await add({ customStatuses: newStatuses });
+     }
+     setShowModal(false);
+     setEditingIndex(null);
+  };
+
+  const removeStatus = async (idx: number) => {
+     if(!window.confirm("Supprimer ce statut ?")) return;
+     let newStatuses = [...statuses];
+     newStatuses.splice(idx, 1);
+     if (config.id) {
+        await update(config.id, { customStatuses: newStatuses });
+     }
+  };
+
+  const moveStatus = async (idx: number, dir: number) => {
+     let newStatuses = [...statuses];
+     if (idx + dir < 0 || idx + dir >= newStatuses.length) return;
+     const temp = newStatuses[idx];
+     newStatuses[idx] = newStatuses[idx + dir];
+     newStatuses[idx + dir] = temp;
+     if (config.id) {
+        await update(config.id, { customStatuses: newStatuses });
+     }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+           <h2 className="font-black text-2xl text-gray-900">Statuts de Commande</h2>
+           <p className="text-gray-500 text-sm mt-1">Personnalisez le cycle de vie d'une commande.</p>
+        </div>
+        {canEdit && (
+          <button onClick={() => { setEditingIndex(null); setShowModal(true); }} className="bg-[#DA291C] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2">
+            <Plus className="w-4 h-4"/> Ajouter Statut
+          </button>
+        )}
+      </div>
+
+      {loading ? <div className="animate-pulse space-y-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div> : (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
+          {statuses.map((st: any, idx: number) => (
+             <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-xl gap-4">
+                <div className="flex items-center gap-4">
+                   <div className="flex flex-col gap-1">
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveStatus(idx, -1); }} disabled={idx === 0} className="text-gray-400 hover:text-gray-900 disabled:opacity-30">▲</button>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveStatus(idx, 1); }} disabled={idx === statuses.length - 1} className="text-gray-400 hover:text-gray-900 disabled:opacity-30">▼</button>
+                   </div>
+                   <div>
+                     <div className="flex items-center gap-3 mb-1">
+                       <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${st.color}`}>{st.label} ({st.id})</span>
+                       {st.isTerminal && <span className="bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Terminal</span>}
+                       {st.isCanceled && <span className="bg-red-200 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Annulation</span>}
+                     </div>
+                     <p className="text-xs text-gray-500">Client voit: <span className="font-medium text-gray-700">"{st.customerLabel}"</span></p>
+                   </div>
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => { setEditingIndex(idx); setShowModal(true); }} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg font-bold text-sm">Modifier</button>
+                    <button onClick={() => removeStatus(idx)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                )}
+             </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-black text-2xl mb-6 text-gray-900">{editingIndex !== null ? 'Modifier le statut' : 'Nouveau statut'}</h3>
+            <form onSubmit={handleSaveStatus} className="space-y-4">
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">ID Interne (ex: en_livraison)</label>
+                  <input name="sid" defaultValue={editingIndex !== null ? statuses[editingIndex].id : ''} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" placeholder="mon_statut" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Label Admin (ex: En cours de livraison)</label>
+                  <input name="label" defaultValue={editingIndex !== null ? statuses[editingIndex].label : ''} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" placeholder="Label pour l'admin" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Message pour le client</label>
+                  <input name="customerLabel" defaultValue={editingIndex !== null ? statuses[editingIndex].customerLabel : ''} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" placeholder="Votre commande est en route !" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Couleur Tailwind (ex: bg-blue-100 text-blue-700)</label>
+                  <input name="color" defaultValue={editingIndex !== null ? statuses[editingIndex].color : 'bg-gray-100 text-gray-700'} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" />
+               </div>
+               <div className="flex flex-col gap-2 mt-4 bg-gray-50 p-4 border rounded-xl">
+                 <div className="flex items-center gap-3">
+                   <input type="checkbox" name="isTerminal" defaultChecked={editingIndex !== null ? statuses[editingIndex].isTerminal : false} className="w-5 h-5 accent-[#DA291C] cursor-pointer" />
+                   <span className="font-bold text-sm">Statut Terminal (archive la commande)</span>
+                 </div>
+                 <div className="flex items-center gap-3">
+                   <input type="checkbox" name="isCanceled" defaultChecked={editingIndex !== null ? statuses[editingIndex].isCanceled : false} className="w-5 h-5 accent-[#DA291C] cursor-pointer" />
+                   <span className="font-bold text-sm">Statut Annulation (commande échouée/annulée)</span>
+                 </div>
+               </div>
+               <div className="pt-4 flex gap-3">
+                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-200 text-gray-800 font-black uppercase text-sm py-4 rounded-xl">Annuler</button>
+                 <button type="submit" className="flex-1 bg-gray-900 text-white font-black uppercase text-sm py-4 rounded-xl">Enregistrer</button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminConfig({ role }: { role: string | null }) {
   const { data: configs, loading, update, add } = useFirestore('config', 'brandName');
   const [saving, setSaving] = useState(false);

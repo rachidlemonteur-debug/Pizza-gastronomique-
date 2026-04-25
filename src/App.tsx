@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';                
+import { db } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
@@ -197,11 +198,22 @@ export default function App() {
   useEffect(() => {
     const savedCart = localStorage.getItem('gastro_cart');
     if (savedCart) setCart(JSON.parse(savedCart));
+    
+    const savedOrder = localStorage.getItem('gastro_active_order');
+    if (savedOrder) setActiveOrder(JSON.parse(savedOrder));
   }, []);
 
   useEffect(() => {
     localStorage.setItem('gastro_cart', JSON.stringify(cart));
   }, [cart]);
+
+  useEffect(() => {
+    if (activeOrder) {
+      localStorage.setItem('gastro_active_order', JSON.stringify(activeOrder));
+    } else {
+      localStorage.removeItem('gastro_active_order');
+    }
+  }, [activeOrder]);
 
   // Dynamic Data placeholder logic to fallback while hook is implemented
   const { data: globalProductsData } = useFirestore('products');
@@ -319,6 +331,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (globalConfig?.seoTitle) {
@@ -347,7 +360,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col min-h-screen pb-24 sm:pb-0 overflow-x-hidden">
       {/* ACTIVE ORDER TOP BANNER */}
       {activeOrder && location.pathname !== '/tracking' && (
-        <div className="bg-[#DA291C] text-white px-4 py-2 flex items-center justify-center gap-4 z-[100] relative cursor-pointer" onClick={() => window.location.href='/tracking'}>
+        <div className="bg-[#DA291C] text-white px-4 py-2 flex items-center justify-center gap-4 z-[100] relative cursor-pointer" onClick={() => navigate('/tracking')}>
            <div className="relative flex items-center justify-center">
              <div className="absolute inset-0 bg-white rounded-full animate-ping opacity-30"></div>
              <Bike className="w-5 h-5 relative z-10" />
@@ -522,6 +535,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                <ul className="space-y-4 font-bold text-gray-400">
                  <li><Link to="/restaurants" className="hover:text-white transition-colors">Localiser un Drive</Link></li>
                  <li><Link to="/recrutement" className="hover:text-white transition-colors">Recrutement</Link></li>
+                 <li><Link to="/admin" className="hover:text-[#FFC72C] transition-colors">Staff / Admin</Link></li>
                </ul>
             </div>
 
@@ -653,7 +667,7 @@ function Layout({ children }: { children: React.ReactNode }) {
          <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="bg-[#25D366] text-white p-4 rounded-2xl shadow-lg shadow-green-100">
             <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.067 2.877 1.215 3.076.149.198 2.095 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.72.937 3.659 1.431 5.63 1.432h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
          </a>
-         <a href={`tel:${whatsappNumber}`} className="bg-gray-900 text-white p-4 rounded-2xl shadow-lg shadow-gray-200">
+         <a href={`tel:${whatsappNumber?.replace(/\s/g, '')}`} className="bg-gray-900 text-white p-4 rounded-2xl shadow-lg shadow-gray-200">
             <Phone className="w-5 h-5" />
          </a>
       </div>
@@ -783,10 +797,17 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     setIsProcessing(true);
     
     const generatedId = 'CMD-' + Math.floor(1000 + Math.random() * 9000);
+    
+    // Default initial status
+    let initialStatus = 'pending';
+    if (globalConfig?.customStatuses && globalConfig.customStatuses.length > 0) {
+       initialStatus = globalConfig.customStatuses[0].id;
+    }
+
     const newOrderData = {
        id: generatedId, // Keep for old apps
        orderNumber: generatedId,
-       status: 'pending',
+       status: initialStatus,
        total: getCartTotal(),
        items: [...cart], // clone to keep items
        orderMode: orderMode,
@@ -1736,15 +1757,22 @@ function PageTracking() {
        const driveMinutes = Math.max(1, Math.ceil((distMeters / 350) + 2));
        
        let totalEta = driveMinutes;
-       if (activeOrder.status === 'pending') totalEta += 15;
-       else if (activeOrder.status === 'preparing') totalEta += 10;
-       else if (activeOrder.status === 'ready') totalEta += 5;
+       
+       const statuses = globalConfig?.customStatuses || [
+           { id: 'pending' }, { id: 'preparing' }, { id: 'ready' }, { id: 'delivering' }, { id: 'completed' }
+       ];
+       const currentIdx = statuses.findIndex((s:any) => s.id === activeOrder.status);
+       
+       // Add fixed times if early in the pipeline (rough generic estimate)
+       if (currentIdx === 0) totalEta += 15;
+       else if (currentIdx === 1) totalEta += 10;
+       else if (currentIdx === 2) totalEta += 5;
        
        setDynamicEta(totalEta);
      } else {
        setDynamicEta(activeOrder?.etaMinutes || 0);
      }
-  }, [pos, destPos, activeOrder]);
+  }, [pos, destPos, activeOrder, globalConfig]);
 
   // REAL-TIME GPS SIMULATOR ALONG ROADS
   useEffect(() => {
@@ -1863,31 +1891,44 @@ function PageTracking() {
           
           {/* Tracker Status Progress */}
           <div className="mt-8">
-             <div className="flex justify-between mb-2 text-xs font-bold text-gray-400 uppercase">
-                <span className={(activeOrder.status === 'pending' || activeOrder.status === 'preparing') ? "text-[#DA291C]" : ""}>Préparation</span>
-                <span className={(activeOrder.status === 'ready' || activeOrder.status === 'delivering') ? "text-[#FFC72C]" : ""}>{activeOrder.orderMode === 'livraison' ? 'En route' : 'Prête'}</span>
-                <span className={activeOrder.status === 'completed' ? "text-[#25D366]" : ""}>{activeOrder.orderMode === 'livraison' ? 'Livré' : 'Récupéré'}</span>
-             </div>
-             <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
-                <div 
-                  className="bg-gradient-to-r from-[#DA291C] to-[#FFC72C] h-full rounded-full transition-all duration-1000" 
-                  style={{ 
-                    width: activeOrder.status === 'pending' ? '15%' : 
-                           activeOrder.status === 'preparing' ? '30%' : 
-                           activeOrder.status === 'ready' ? '60%' :
-                           activeOrder.status === 'delivering' ? '80%' : 
-                           activeOrder.status === 'completed' ? '100%' : '0%' 
-                  }} 
-                />
-             </div>
-             <div className="mt-4 text-center bg-gray-50 py-3 rounded-xl border border-gray-100">
-               {activeOrder.status === 'pending' && <p className="text-gray-500 font-bold text-sm">Commande reçue, en attente de confirmation...</p>}
-               {activeOrder.status === 'preparing' && <p className="text-[#DA291C] font-black text-sm uppercase tracking-wider">Vos plats sont en cours de préparation en cuisine ! 👨‍🍳</p>}
-               {activeOrder.status === 'ready' && <p className="text-[#FFC72C] font-black text-sm uppercase tracking-wider">{activeOrder.orderMode === 'livraison' ? 'Commande prête, attente du livreur.' : 'Commande prête, rendez-vous au comptoir !'} 🛍️</p>}
-               {activeOrder.status === 'delivering' && <p className="text-[#DA291C] font-black text-sm uppercase tracking-wider">Le livreur est en route vers chez vous ! 🛵</p>}
-               {activeOrder.status === 'completed' && <p className="text-[#25D366] font-black text-sm uppercase tracking-wider">Commande terminée. Bon appétit ! 🎉</p>}
-               {activeOrder.status === 'canceled' && <p className="text-red-600 font-black text-sm uppercase tracking-wider">Commande annulée.</p>}
-             </div>
+             {(() => {
+                const statuses = globalConfig?.customStatuses || [
+                  { id: 'pending', label: 'Nouvelle', customerLabel: 'Commande reçue, en attente...', color: 'bg-red-100 text-red-700', isTerminal: false },
+                  { id: 'preparing', label: 'En cuisine', customerLabel: 'Vos plats sont en cours de préparation en cuisine ! 👨‍🍳', color: 'bg-orange-100 text-orange-700', isTerminal: false },
+                  { id: 'ready', label: 'Prête', customerLabel: 'Commande prête !', color: 'bg-yellow-100 text-yellow-700', isTerminal: false },
+                  { id: 'delivering', label: 'En livraison', customerLabel: 'Le livreur est en route vers chez vous ! 🛵', color: 'bg-blue-100 text-blue-700', isTerminal: false },
+                  { id: 'completed', label: 'Terminée', customerLabel: 'Commande terminée !', color: 'bg-green-100 text-green-700', isTerminal: true },
+                  { id: 'canceled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCanceled: true }
+                ];
+
+                const currentIdx = statuses.findIndex((s:any) => s.id === activeOrder.status);
+                const validStatuses = statuses.filter((s:any) => !s.isCanceled); // typically progress bar ignores canceled state
+                const currentValidIdx = validStatuses.findIndex((s:any) => s.id === activeOrder.status);
+                const progressPct = currentValidIdx >= 0 ? Math.max(10, ((currentValidIdx + 1) / validStatuses.length) * 100) : 0;
+                
+                const currentStatusObj = statuses.find((s:any) => s.id === activeOrder.status);
+
+                return (
+                  <>
+                     <div className="flex justify-between mb-2 text-[10px] sm:text-xs font-bold text-gray-400 uppercase text-center gap-1">
+                        {validStatuses.map((st:any, i:number) => (
+                           <span key={st.id} className={currentValidIdx >= i ? "text-[#DA291C] flex-1 line-clamp-1" : "flex-1 line-clamp-1"}>{st.label}</span>
+                        ))}
+                     </div>
+                     <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-1000 ${currentStatusObj?.isCanceled ? 'bg-gray-400' : 'bg-gradient-to-r from-[#DA291C] to-[#FFC72C]'}`}
+                          style={{ width: currentStatusObj?.isCanceled ? '100%' : `${progressPct}%` }} 
+                        />
+                     </div>
+                     <div className="mt-4 text-center bg-gray-50 py-3 rounded-xl border border-gray-100">
+                       <p className={`font-black text-sm uppercase tracking-wider ${currentStatusObj?.isCanceled ? 'text-gray-500' : 'text-[#DA291C]'}`}>
+                         {currentStatusObj?.customerLabel || 'Statut inconnu'}
+                       </p>
+                     </div>
+                  </>
+                );
+             })()}
           </div>
         </div>
       </div>
