@@ -63,6 +63,13 @@
         "orderMode": { "type": "string" },
         "posId": { "type": "string" },
         "posName": { "type": "string" },
+        "driverLocation": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
         "createdAt": { "type": "string" }
       },
       "required": ["customerName", "total", "status"]
@@ -110,6 +117,32 @@
       },
       "required": ["userId", "action", "timestamp"]
     },
+    "Promo": {
+      "title": "Promotion",
+      "description": "Marketing promotions",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "discountType": { "type": "string", "enum": ["percent", "fixed"] },
+        "discountValue": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "bannerImage": { "type": "string" }
+      },
+      "required": ["title", "isActive"]
+    },
+    "PageContent": {
+      "title": "Page Content",
+      "description": "CMS for static page content",
+      "type": "object",
+      "properties": {
+        "pageKey": { "type": "string" },
+        "sections": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["pageKey"]
+    },
     "Admin": {
       "title": "Admin Role",
       "description": "Admin access list",
@@ -153,6 +186,14 @@
     "/admins/{userId}": {
       "schema": { "$ref": "#/entities/Admin" },
       "description": "RBAC verification for admins"
+    },
+    "/promos/{promoId}": {
+      "schema": { "$ref": "#/entities/Promo" },
+      "description": "Promotions"
+    },
+    "/page_content/{pageKey}": {
+      "schema": { "$ref": "#/entities/PageContent" },
+      "description": "CMS Page content"
     }
   }
 }

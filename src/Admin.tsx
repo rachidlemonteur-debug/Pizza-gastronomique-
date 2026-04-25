@@ -952,6 +952,14 @@ function AdminOrders({ role }: { role: string | null }) {
                        Passer à l'étape suivante ➡️
                      </button>
                    )}
+                   {(canEdit && order.status === 'delivering') && (
+                     <button 
+                       onClick={() => update(order.id, { driverLocation: { lat: -18.910012 + Math.random() * 0.01, lng: 47.525581 + Math.random() * 0.01 } })} 
+                       className="px-3 py-2.5 bg-blue-50 text-blue-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-100 active:scale-95 transition-all outline outline-1 outline-blue-200"
+                     >
+                       Simuler position
+                     </button>
+                   )}
                    {(canEdit && order.status === 'pending') && (
                      <button onClick={() => update(order.id, { status: 'canceled'})} className="px-3 py-2.5 bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-red-100 active:scale-95 transition-all outline outline-1 outline-red-200">Annuler</button>
                    )}

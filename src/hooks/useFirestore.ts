@@ -2,21 +2,33 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export function useFirestore(colName: string, orderField: string = 'name') {
-  const [data, setData] = useState<any[]>([]);
+export function useFirestore(colName: string, orderField: string = 'name', docId?: string) {
+  const [data, setData] = useState<any[] | any>(docId ? null : []);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, colName), orderBy(orderField));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setData(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
-      setLoading(false);
-    }, (err) => {
-      console.error(err);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [colName, orderField]);
+    if (docId) {
+      const docRef = doc(db, colName, docId);
+      const unsubscribe = onSnapshot(docRef, (snapshot) => {
+        setData(snapshot.exists() ? { ...snapshot.data(), id: snapshot.id } : null);
+        setLoading(false);
+      }, (err) => {
+        console.error(err);
+        setLoading(false);
+      });
+      return () => unsubscribe();
+    } else {
+      const q = query(collection(db, colName), orderBy(orderField));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        setData(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+        setLoading(false);
+      }, (err) => {
+        console.error(err);
+        setLoading(false);
+      });
+      return () => unsubscribe();
+    }
+  }, [colName, orderField, docId]);
 
   const handleCall = async (fn: () => Promise<any>) => {
     try {
@@ -33,7 +45,10 @@ export function useFirestore(colName: string, orderField: string = 'name') {
   };
 
   const add = async (item: any) => {
-    await handleCall(() => addDoc(collection(db, colName), item));
+    return await handleCall(async () => {
+        const docRef = await addDoc(collection(db, colName), item);
+        return docRef.id;
+    });
   };
 
   const update = async (id: string, item: any) => {

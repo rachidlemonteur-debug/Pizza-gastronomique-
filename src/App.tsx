@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { doc, onSnapshot } from 'firebase/firestore';                
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
@@ -239,6 +240,20 @@ export default function App() {
       });
     }
   }, [globalPOS.length]);
+
+  // Sync activeOrder in real-time
+  useEffect(() => {
+    if (!activeOrder?.id) return;
+    const docRef = doc(db, 'orders', activeOrder.id);
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+            setActiveOrder({ ...snapshot.data(), id: snapshot.id });
+        }
+    }, (err) => {
+        console.error("Tracking order error:", err);
+    });
+    return () => unsubscribe();
+  }, [activeOrder?.id]);
 
   const addToCart = (product: ProductInfo, quantity: number, instructions: string = '') => {
     setCart(prev => {
@@ -786,7 +801,8 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     
     // Add to Firestore
     try {
-      await addOrder(newOrderData);
+      const orderId = await addOrder(newOrderData);
+      newOrderData.id = orderId;
     } catch (e) {
       console.error("Firebase err:", e);
     }
@@ -1734,6 +1750,11 @@ function PageTracking() {
   useEffect(() => {
     if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
     
+    if (activeOrder?.driverLocation) {
+      setPos([activeOrder.driverLocation.lat, activeOrder.driverLocation.lng]);
+      return;
+    }
+
     if (activeOrder.status !== 'delivering' && activeOrder.status !== 'completed') {
       setPos(storePos);
       setIsLiveGPS(false);

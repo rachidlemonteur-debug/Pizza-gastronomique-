@@ -119,16 +119,28 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // -- REVIEWS --
-    function isValidReview(data) {
-      return data.keys().hasOnly(['customerName', 'rating', 'comment', 'isApproved', 'createdAt']) &&
-             data.customerName is string && data.rating is number;
+    // -- PROMOS --
+    function isValidPromo(data) {
+      return data.keys().hasOnly(['title', 'description', 'discountType', 'discountValue', 'startDate', 'endDate', 'isActive', 'bannerImage']) &&
+             (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() > 0));
     }
-    match /reviews/{reviewId} {
-      allow get: if isValidId(reviewId);
-      allow list: if true; // Public can see approved ones, admin sees all
-      allow create: if isValidReview(incoming());
-      allow update: if isEditor() && isValidReview(incoming());
+    match /promos/{promoId} {
+      allow get: if isValidId(promoId);
+      allow list: if true;
+      allow create: if isEditor() && isValidPromo(incoming());
+      allow update: if isEditor() && isValidPromo(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- PAGE CONTENT --
+    function isValidPageContent(data) {
+      return data.keys().hasOnly(['pageKey', 'sections']);
+    }
+    match /page_content/{pageKey} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isEditor() && isValidPageContent(incoming());
+      allow update: if isEditor() && isValidPageContent(incoming());
       allow delete: if isAdmin();
     }
 
