@@ -99,11 +99,12 @@ export default function AdminApp() {
     { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Promos & Bannières', path: '/admin/promos', icon: <Star className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Contenu (CMS)', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
+    { name: 'Contenu & FAQ', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Statuts Commandes', path: '/admin/statuses', icon: <Activity className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Configuration', path: '/admin/config', icon: <Settings className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
     { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, allow: ['super_admin'] },
     { name: 'Logs d\'Activité', path: '/admin/logs', icon: <Lock className="w-5 h-5"/>, allow: ['super_admin'] },
+    { name: 'Sauvegardes', path: '/admin/backups', icon: <Download className="w-5 h-5"/>, allow: ['super_admin'] },
   ].filter(item => item.allow.includes(role || 'viewer'));
 
   return (
@@ -182,6 +183,7 @@ export default function AdminApp() {
              <Route path="/config" element={['super_admin', 'admin'].includes(role!) ? <AdminConfig role={role} /> : <NoAccess />} />
              <Route path="/users" element={role === 'super_admin' ? <AdminUsers /> : <NoAccess />} />
              <Route path="/logs" element={role === 'super_admin' ? <AdminLogs /> : <NoAccess />} />
+             <Route path="/backups" element={role === 'super_admin' ? <AdminBackups /> : <NoAccess />} />
            </Routes>
         </main>
       </div>
@@ -1771,6 +1773,70 @@ function AdminLogs() {
               <span className="text-gray-400">{log.userName}</span>
            </div>
          ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminBackups() {
+  const { data: config } = useFirestore('config');
+  const { data: products } = useFirestore('products');
+  const { data: categories } = useFirestore('categories');
+  const { data: pos } = useFirestore('points_of_sale');
+
+  const handleExport = () => {
+    const backup = {
+      timestamp: new Date().toISOString(),
+      config,
+      products,
+      categories,
+      pos
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("download", "gastronomie-backup-" + new Date().toISOString().split('T')[0] + ".json");
+    document.body.appendChild(downloadAnchorNode); 
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    logActivity("EXPORT_SAUVEGARDE", "Base de données complète exportée");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Sauvegardes de Sécurité</h2>
+          <p className="text-gray-500 font-bold text-sm mt-1">Exportez la base de données de production vers un fichier JSON sécurisé.</p>
+        </div>
+      </div>
+      
+      <div className="bg-white p-6 sm:p-10 rounded-3xl border border-gray-100 shadow-sm">
+         <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-6">
+            <Download className="w-8 h-8" />
+         </div>
+         <h3 className="font-black text-xl mb-2">Exporter le catalogue et la configuration</h3>
+         <p className="text-gray-500 font-bold mb-8 max-w-xl">
+           Générez un fichier JSON contenant l'intégralité de la configuration, des catégories, des produits et des points de vente. Utilisez ce fichier à des fins d'archivage.
+         </p>
+         <button 
+           onClick={handleExport}
+           className="bg-gray-900 text-white px-8 py-3.5 rounded-xl font-black flex items-center gap-2 hover:bg-black transition-all shadow-lg active:scale-95"
+         >
+           <Download className="w-5 h-5"/>
+           Télécharger l'Archive
+         </button>
+      </div>
+      
+      <div className="bg-red-50 p-6 sm:p-10 rounded-3xl border border-red-100">
+         <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+            <UploadCloud className="w-8 h-8" />
+         </div>
+         <h3 className="font-black text-xl mb-2 text-red-900">Restauration (Import)</h3>
+         <p className="text-red-700 font-bold max-w-xl text-sm">
+           Pour restaurer les données d'usine, vous devez procéder manuellement via la Console Firebase en raison des règles de sécurité. L'importation directe écraserait les instances en cours (Commandes).
+         </p>
       </div>
     </div>
   );

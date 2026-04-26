@@ -1,7 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';                
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
@@ -32,7 +32,7 @@ function MapUpdater({ center, zoom }: { center: [number, number], zoom: number }
 }
 import AdminApp from './Admin';
 import { useFirestore } from './hooks/useFirestore';
-import { PagePrivacy, PageTerms, PageCookies, PageDelivery, PageAbout } from './LegalPages';
+import { PagePrivacy, PageTerms, PageCookies, PageDelivery, PageAbout, PageContact } from './LegalPages';
 
 // --- ROBUST API SIMULATION UTILITY ---
 const simulateApiCall = <T,>(data: T, failureRate: number = 0.3, delay: number = 800): Promise<T> => {
@@ -179,6 +179,7 @@ const AppWithRouter = () => {
                 <Route path="/politique-cookies" element={<PageCookies />} />
                 <Route path="/politique-livraison" element={<PageDelivery />} />
                 <Route path="/a-propos" element={<PageAbout />} />
+                <Route path="/contact" element={<PageContact />} />
               </Routes>
             </Layout>
           } />
@@ -550,7 +551,6 @@ function Layout({ children }: { children: React.ReactNode }) {
                  <li><Link to="/a-propos" className="hover:text-white transition-colors">À Propos de nous</Link></li>
                  <li><Link to="/restaurants" className="hover:text-white transition-colors">Localiser un Drive</Link></li>
                  <li><Link to="/recrutement" className="hover:text-white transition-colors">Recrutement</Link></li>
-                 <li><Link to="/admin" className="hover:text-[#FFC72C] transition-colors">Staff / Admin</Link></li>
                </ul>
             </div>
 
@@ -576,6 +576,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <Link to="/conditions-utilisation" className="hover:text-white transition-colors">CGV & CGU</Link>
               <Link to="/politique-cookies" className="hover:text-white transition-colors">Cookies</Link>
               <Link to="/politique-livraison" className="hover:text-white transition-colors">Politique de livraison</Link>
+              <Link to="/contact" className="hover:text-white transition-colors">Support & Contact</Link>
            </div>
            <p>© {new Date().getFullYear()} La Gastronomie Pizza. Tous droits réservés.</p>
          </div>
@@ -599,7 +600,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               className="min-w-[340px] bg-[#DA291C] text-white p-3 rounded-[1.25rem] shadow-[0_20px_40px_rgba(218,41,28,0.4)] flex items-center justify-between hover:scale-105 transition-all border-b-[6px] border-red-900 active:translate-y-[6px] active:border-b-0 cursor-pointer group"
             >
               <div className="flex items-center gap-4">
-                 <motion.div key={getCartCount()} initial={{ scale: 0.8, rotate: -15 }} animate={{ scale: 1, rotate: 0 }} type="spring" className="bg-[#FFC72C] text-[#DA291C] w-14 h-14 rounded-xl flex items-center justify-center font-black text-2xl shadow-inner border-2 border-yellow-300">
+                 <motion.div key={getCartCount()} initial={{ scale: 0.8, rotate: -15 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring" }} className="bg-[#FFC72C] text-[#DA291C] w-14 h-14 rounded-xl flex items-center justify-center font-black text-2xl shadow-inner border-2 border-yellow-300">
                    {getCartCount()}
                  </motion.div>
                  <div className="flex flex-col text-left">
@@ -757,7 +758,7 @@ function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
 
 // --- NEW COMPONENT: CART DRAWER (STEP 2 - VALIDATION) ---
 function CartDrawer({ onClose }: { onClose: () => void }) {
-  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber, globalConfig, selectedPOS } = useCart();
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber, globalConfig, selectedPOS, isLoggedIn } = useCart();
   const navigate = useNavigate();
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('emporter');
   const [customerName, setCustomerName] = useState('');
@@ -847,7 +848,8 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     
     // Add to Firestore
     try {
-      const orderId = await addOrder(newOrderData);
+      const sanitizedOrder = JSON.parse(JSON.stringify(newOrderData));
+      const orderId = await addOrder(sanitizedOrder);
       const finalOrder = { ...newOrderData, id: orderId };
       setActiveOrder(finalOrder);
       
@@ -929,7 +931,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                      { id: 'u1', name: "Coca-Cola 50cl", description: "Boisson fraîche", price: 3000, img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300&q=80", categoryId: '5' },
                      { id: 'u2', name: "Frites XL", description: "Portion généreuse", price: 2500, img: "https://images.unsplash.com/photo-1576107232684-1279f3908594?w=300&q=80", categoryId: '1' }
                    ].map((upsell, i) => (
-                     <div key={i} onClick={() => addToCart({id: upsell.id, name: upsell.name, description: upsell.description, price: upsell.price, image: upsell.img, categoryId: upsell.categoryId}, 1)} className="bg-white/10 border border-white/20 rounded-xl p-3 shrink-0 w-[140px] flex flex-col items-center cursor-pointer hover:bg-white/20 transition-all backdrop-blur-sm">
+                     <div key={i} onClick={() => addToCart({id: upsell.id, name: upsell.name, description: upsell.description, price: upsell.price, image: upsell.img, categoryId: upsell.categoryId, badge: '', popular: false}, 1)} className="bg-white/10 border border-white/20 rounded-xl p-3 shrink-0 w-[140px] flex flex-col items-center cursor-pointer hover:bg-white/20 transition-all backdrop-blur-sm">
                        <img src={upsell.img} alt={upsell.name} className="w-16 h-16 object-cover rounded-lg mb-3 shadow-md" />
                        <span className="font-bold text-xs text-center text-white mb-1 line-clamp-1">{upsell.name}</span>
                        <span className="font-black text-[#FFC72C] text-xs">+{formatPriceC(upsell.price)}</span>
@@ -1353,10 +1355,6 @@ function PageLoyalty() {
                  <p>{loginError}</p>
               </motion.div>
             )}
-
-            <p className="text-center font-bold text-xs text-gray-400 mt-4 px-4">
-              En vous connectant, la structure Firebase (auth token) s'activera lors de la prod.
-            </p>
           </div>
         </div>
       </div>

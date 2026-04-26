@@ -22,72 +22,117 @@ export function LegalPagesWrapper({ title, content, globalConfig }: { title: str
 }
 
 const defaultPrivacyContent = `
-## 1. Informations que nous collectons
-Nous recueillons les informations que vous nous fournissez directement, notamment lors de la création d'une commande (nom, adresse, numéro de téléphone).
+## 1. Données collectées
+Nous recueillons :
+- **Données d'identification** : Nom, prénom ou pseudo.
+- **Données de contact** : Numéro de téléphone (via WhatsApp) et adresses de livraison.
+- **Données de géolocalisation** (avec votre consentement) : Pour identifier le restaurant le plus proche et vous livrer précisément.
+- **Données techniques** : Adresse IP, modèle d'appareil, pour identifier et résoudre les anomalies.
 
-## 2. Comment nous utilisons vos informations
-Nous utilisons les informations que nous collectons pour :
-- Traiter et livrer vos commandes.
-- Vous envoyer des mises à jour sur l'état de celles-ci.
-- Répondre à vos questions et demandes via le support.
+## 2. Pourquoi sont-elles collectées ?
+Nous utilisons ces informations uniquement pour :
+- Prendre en charge, préparer et livrer votre commande vers la bonne adresse.
+- Assurer le suivi de commande en temps réel.
+- Améliorer notre service de livraison via les retours sur expérience.
 
-## 3. Partage d'informations
-Vos données personnelles ne sont **jamais** vendues à des acteurs tiers. Elles sont uniquement partagées avec nos équipes de préparation et de livraison pour assurer le service.
+## 3. Durée de conservation
+Vos données de commande sont conservées dans notre système de gestion interne pour une durée maximale de 3 ans, pour des raisons purement comptables et de suivi qualité.
 
-## 4. Sécurité
-Nous mettons en œuvre des mesures de sécurité pour protéger vos données contre les accès non autorisés, la modification ou la destruction.
+## 4. Partage d'informations
+Vos données ne sont **ni louées, ni vendues**. Elles sont exclusivement partagées entre le serveur central et les livreurs de La Gastronomie de manière chiffrée, limitées au strict nécessaire (votre position et numéro).
 
-## 5. Contact
-Pour toute question, veuillez nous contacter aux numéros affichés en bas de page.
+## 5. Vos droits
+Conformément à la réglementation, vous bénéficiez des droits d'accès, de rectification, de portabilité et de suppression de vos données. Pour les exercer, contactez le support via nos numéros WhatsApp associés à vos points de vente habituels, ou par email si applicable.
+
+## 6. Protection & Sécurité
+Nous appliquons les meilleures pratiques de cryptage et de sécurisation de base de données (Zero-Trust Security, Authentification stricte des requêtes web) pour empêcher tout accès frauduleux à vos adresses.
 `;
 
 const defaultTermsContent = `
-## 1. Conditions d'utilisation
-En accédant au présent site web, vous acceptez d'être lié par ces conditions d'utilisation, toutes les lois et réglementations applicables.
+## 1. Conditions d'utilisation (CGU)
+L'utilisation de cette application web implique l'acceptation pleine et entière de ces CGU. Si vous n'êtes pas d'accord, veuillez cesser votre navigation.
 
-## 2. Commandes et Validations
-Toute commande effectuée sur la plateforme constitue un engagement ferme. Nous nous réservons le droit d'annuler ou de refuser toute commande d'un client avec lequel il existerait un litige.
+## 2. Conditions de Commande
+Toute commande déclenchée via le bouton "Commander" (sur le site ou la redirection WhatsApp) constitue la conclusion ferme d'un achat.
+- **Validation** : La commande est validée dès lors qu'elle apparaît avec le statut "Nouvelle" dans le système.
+- **Disponibilité** : En cas de rupture subite de matière première, un restaurant peut annuler votre commande ; vous en serez notifié via suivi ou appel direct.
+- **Modification** : Une fois "En préparation" ou "En cuisine", les modifications de commande ne sont généralement plus acceptées.
+- **Litiges** : Pour toute réclamation, un reçu détaillé est disponible dans votre espace de suivi.
 
-## 3. Tarifs
-Les prix de nos produits sont indiqués en Ariary (Ar) toutes taxes comprises. La Gastronomie se réserve le droit de modifier ses prix à tout moment.
+## 3. Paiement
+Les paiements se font selon les modalités locales (ex. Mobile Money ou en espèces à la livraison), détaillés au moment où notre centre vous confirmera la réception.
 
-## 4. Droit applicable
-Les présentes conditions sont régies et interprétées conformément aux lois en vigueur à Madagascar.
+## 4. Tarifs
+Les prix s'affichent en Ariary (Ar) ou devises locales. La Gastronomie se réserve le droit d’ajuster les tarifs, sans que ces changements n'impactent une commande déjà confirmée.
+
+## 5. Propriété intellectuelle
+Tous les contenus visuels, logos, noms et concepts présents sur ce site appartiennent à La Gastronomie Pizza.
 `;
 
 const defaultCookiesContent = `
 ## 1. Qu'est-ce qu'un cookie ?
-Un cookie est un petit fichier texte déposé sur votre appareil lors de la visite du site ou de la consultation d'une page.
+Un cookie est fichier déposé de manière temporaire sur votre équipement terminal.
 
-## 2. Utilisation
-Notre application utilise uniquement des cookies essentiels ou des technologies de stockage local (Local Storage) nécessaires au fonctionnement du panier et au maintien de votre session de commande ou d'administration.
+## 2. Notre politique « Zéro Cookie Publicitaire »
+Notre plateforme est conçue pour l'action. **Nous n'utilisons aucun traceur publicitaire intrusif** (pas de retargeting, pas de pistage inter-sites).
 
-## 3. Cookies Tiers
-Nous pouvons occasionnellement utiliser des services tiers (pour la cartographie, exemples OSRM ou Leaflet) qui peuvent déposer des cookies pour analyser les flux.
+## 3. Cookies strictement nécessaires
+Nous utilisons quasi exclusivement le « Local Storage » pour :
+- Mémoriser le contenu de votre panier en cas de fermeture accidentelle.
+- Sauvegarder l'ID de votre commande en cours pour actualiser le statut de livraison automatiquement à votre retour.
+- Votre sélection de Pays ou de Point de Vente.
+
+## 4. Gestion
+Si vous videz le cache de votre navigateur, vous perdrez votre panier en cours et votre suivi de commande, sans autres conséquences sévères sur le fonctionnement global.
 `;
 
 const defaultDeliveryContent = `
-## 1. Zones de livraison
-Nous livrons dans les zones couvertes par nos points de vente. L'application vous permet de sélectionner le magasin le plus proche. Si votre adresse est hors de portée de notre flotte, nous vous contacterons.
+## 1. Processus et Zones
+La Gastronomie livre à domicile dans un rayon délimité autour de chacun de ses restaurants. Lors de la commande, le point de vente le plus proche vous est automatiquement affecté ou proposé.
+Veuillez vérifier les horaires d'ouverture avant validation.
 
-## 2. Frais
-Un tarif forfaitaire ou variable peut s'appliquer en fonction de la distance, défini lors de l'estimation de votre commande.
+## 2. Retrait sur place (À emporter)
+Dans l'option "À emporter", une fois votre commande validée, un "Code de Retrait" est généré. Veuillez le présenter au comptoir pour sécuriser le transfert de votre commande sans attente !
 
-## 3. Délais
-Nous nous efforçons d'assurer des livraisons rapides (généralement entre 30 et 45 minutes selon l'éloignement et le volume de commandes). Les conditions de circulation ou météorologiques peuvent faire varier le délai.
+## 3. Délais estimés
+Notre algorithme et l'estimation du restaurant calculent une heure approximative d'arrivée (incluant temps de cuisson et variations de trafic). Ce délai reste **indicatif** (30 à 50 minutes en moyenne).
+
+## 4. Limites de Livraison
+En cas d'adresse erronée, illisible, absente sur les plateformes cartographiques, ou de zone non-sécurisée, le chauffeur livreur peut exiger un point de rencontre précis.
 `;
 
 const defaultAboutContent = `
-## Notre Histoire
-La Gastronomie Pizza a vu le jour avec une ambition simple : amener l'excellence de la restauration rapide (QSR) à Madagascar.
+## Notre Mission : Vous servir mieux, plus vite.
+La Gastronomie Pizza est l'épicentre d'un savoir-faire de restauration rapide, allié à des outils technologiques de pointe. 
 
-## Notre Mission
-Servir rapidement nos clients avec des produits frais, locaux, et une qualité irréprochable. Nous continuons d'étendre notre zone de couverture avec toujours plus de points de vente pour être plus proche de vous.
+Notre ambition aujourd'hui : 
+Réduire au strict minimum le temps qui vous sépare de vos plats préférés, en supprimant toute friction entre l'envie et la commande.
+
+## Fraîcheur & Excellence
+Que ce soit nos pâtes fraîches, nos ingrédients rigoureusement contrôlés, ou notre emballage pensé pour préserver la chaleur, nous sommes obsédés par l'excellence de bout en bout. Testez l'expérience digitale, et goûtez la qualité qui a fait notre renommée.
+`;
+
+const defaultContactContent = `
+## Qui sommes-nous ?
+**La Gastronomie Pizza**
+Société de restauration rapide opérant dans toute la juridiction de Madagascar.
+
+## Coordonnées Générales
+- **Adresse centrale** : [Compléter avec adresse physique ou principale]
+- **Email** : contact@lagastronomiepizza.com
+- **Siège social** : Antananarivo, Madagascar.
+
+## Mentions de contact Support & Réclamation
+En cas de problème sur votre commande, le livreur ou la plateforme :
+1. Privilégiez directement la **ligne WhatsApp du support** (visible sur votre application / en bas de page).
+2. Fournissez votre numéro de commande "CMD-XXXX".
+3. Un responsable opérationnel prendra le relai dans les minutes qui suivent.
 `;
 
 export function PagePrivacy() { return <LegalPagesWrapper title="Politique de Confidentialité" content={defaultPrivacyContent} /> }
-export function PageTerms() { return <LegalPagesWrapper title="Conditions d'Utilisation" content={defaultTermsContent} /> }
+export function PageTerms() { return <LegalPagesWrapper title="TOS & Conditions de Commande" content={defaultTermsContent} /> }
 export function PageCookies() { return <LegalPagesWrapper title="Politique des Cookies" content={defaultCookiesContent} /> }
-export function PageDelivery() { return <LegalPagesWrapper title="Politique de Livraison" content={defaultDeliveryContent} /> }
+export function PageDelivery() { return <LegalPagesWrapper title="Livraison & Retrait" content={defaultDeliveryContent} /> }
 export function PageAbout() { return <LegalPagesWrapper title="À Propos" content={defaultAboutContent} /> }
+export function PageContact() { return <LegalPagesWrapper title="Contact & Accessibilité" content={defaultContactContent} /> }
 
