@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';                
 import { db, auth } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -180,6 +180,8 @@ const AppWithRouter = () => {
                 <Route path="/politique-livraison" element={<PageDelivery />} />
                 <Route path="/a-propos" element={<PageAbout />} />
                 <Route path="/contact" element={<PageContact />} />
+                <Route path="/faq" element={<PageCustomCMS specificKey="faq" title="Foire Aux Questions" />} />
+                <Route path="/p/:pageKey" element={<PageCustomCMS specificKey="" title="Page" />} />
               </Routes>
             </Layout>
           } />
@@ -576,6 +578,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <Link to="/conditions-utilisation" className="hover:text-white transition-colors">CGV & CGU</Link>
               <Link to="/politique-cookies" className="hover:text-white transition-colors">Cookies</Link>
               <Link to="/politique-livraison" className="hover:text-white transition-colors">Politique de livraison</Link>
+              <Link to="/faq" className="hover:text-white transition-colors">FAQ</Link>
               <Link to="/contact" className="hover:text-white transition-colors">Support & Contact</Link>
            </div>
            <p>© {new Date().getFullYear()} La Gastronomie Pizza. Tous droits réservés.</p>
@@ -831,7 +834,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     const generatedId = 'CMD-' + Math.floor(1000 + Math.random() * 9000);
     
     // Initial status
-    let initialStatus = 'nouvelle';
+    let initialStatus = 'pending';
     if (globalConfig?.customStatuses && globalConfig.customStatuses.length > 0) {
        initialStatus = globalConfig.customStatuses[0].id;
     }
@@ -1088,6 +1091,29 @@ function PromoBanner({ globalConfig }: { globalConfig: any }) {
    );
 }
 
+function LivePromos() {
+  const { data: promos, loading } = useFirestore('promos');
+  const activePromos = promos?.filter((p: any) => p.isActive);
+
+  if (loading || !activePromos || activePromos.length === 0) return null;
+
+  return (
+    <section className="py-10 bg-[#DA291C] text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+         <h2 className="font-black text-2xl uppercase tracking-tight mb-6">Nos Offres du Moment</h2>
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           {activePromos.map((p: any) => (
+              <div key={p.id} className="bg-white/10 rounded-2xl p-6 border border-white/20 hover:bg-white/20 transition-colors">
+                 <h3 className="font-black text-xl mb-2 text-[#FFC72C] uppercase">{p.title}</h3>
+                 <p className="font-bold text-red-50 text-sm whitespace-pre-line leading-relaxed">{p.description}</p>
+              </div>
+           ))}
+         </div>
+      </div>
+    </section>
+  );
+}
+
 function PageHome() {
   const { globalProducts: products, globalCategories: categories, globalConfig } = useCart();
   const heroProduct = products.length > 0 ? products[0] : null;
@@ -1095,6 +1121,7 @@ function PageHome() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="bg-white pb-12">
       <PromoBanner globalConfig={globalConfig} />
+      <LivePromos />
       
       {/* MASSIVE PROMO HERO */}
       <div className="bg-gradient-to-br from-[#DA291C] to-[#99140d] text-white relative overflow-hidden">
@@ -1753,7 +1780,19 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 
 // --- TRACKING PAGE ---
 function PageTracking() {
-  const { activeOrder, formatPriceC, whatsappNumber, selectedPOS, globalConfig } = useCart();
+  const { activeOrder: localOrder, formatPriceC, whatsappNumber, selectedPOS, globalConfig, setActiveOrder } = useCart();
+  const { data: liveOrder } = useFirestore('orders', 'timestamp', localOrder?.id || 'EMPTY_DOC');
+  
+  // Use liveOrder if available, otherwise fallback to localOrder
+  const activeOrder = liveOrder || localOrder;
+
+  // Sync back to local storage and cart context state if live order has newer status
+  useEffect(() => {
+     if (liveOrder && localOrder && liveOrder.status !== localOrder.status) {
+         setActiveOrder(liveOrder);
+     }
+  }, [liveOrder, localOrder, setActiveOrder]);
+
   const navigate = useNavigate();
   const storePos: [number, number] = [selectedPOS?.lat || -18.910012, selectedPOS?.lng || 47.525581];
   const destPos: [number, number] = activeOrder?.orderMode === 'livraison' ? [-18.918000, 47.532000] : storePos;
@@ -1995,7 +2034,7 @@ function PageTracking() {
              <div className="relative z-10 pt-4">
                 <div className="flex justify-between items-center mb-1">
                    <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Sous-Total</p>
-                   <p className="font-black text-gray-700">{formatPriceC(activeOrder.total)}</p>
+                   <p className="font-black text-gray-700">{formatPriceC(activeOrder.total - (activeOrder.orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0))}</p>
                 </div>
                 <div className="flex justify-between items-center mb-4">
                    <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Livraison</p>
@@ -2004,7 +2043,7 @@ function PageTracking() {
                 
                 <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
                    <p className="font-black text-gray-400 uppercase tracking-widest text-sm">Total payé</p>
-                   <p className="font-black text-3xl text-gray-900">{formatPriceC(activeOrder.total + (activeOrder.orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0))}</p>
+                   <p className="font-black text-3xl text-gray-900">{formatPriceC(activeOrder.total)}</p>
                 </div>
              </div>
            </div>
@@ -2067,6 +2106,54 @@ function PageTracking() {
 
     </div>
   )
+}
+
+function PageCustomCMS({ specificKey, title }: { specificKey: string, title: string }) {
+  const { pageKey: routeKey } = useParams();
+  const targetKey = specificKey || routeKey;
+  const { data: pages, loading } = useFirestore('page_content');
+  const [page, setPage] = useState<any>(null);
+
+  useEffect(() => {
+    if (!loading && pages) {
+      const found = pages.find((p: any) => p.pageKey === targetKey);
+      setPage(found);
+    }
+  }, [loading, pages, targetKey]);
+
+  return (
+    <div className="min-h-screen bg-gray-50 pt-24 pb-24">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-[#DA291C] transition-colors mb-8">
+           <ArrowLeft className="w-4 h-4" /> Retour
+        </Link>
+        <div className="bg-white rounded-[2rem] p-8 sm:p-16 shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100">
+           <h1 className="text-3xl sm:text-5xl font-black text-gray-900 tracking-tight uppercase mb-8 pb-8 border-b border-gray-100">{page?.title || title || (targetKey ? targetKey.toUpperCase() : 'Page')}</h1>
+           {loading ? (
+             <div className="animate-pulse space-y-4">
+                <div className="h-4 bg-gray-200 rounded w-full"></div>
+                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                <div className="h-4 bg-gray-200 rounded w-4/6"></div>
+             </div>
+           ) : page ? (
+             <div className="space-y-8">
+                {page.sections?.map((s: any, idx: number) => (
+                  <div key={idx}>
+                     {s.title && <h2 className="text-xl font-black text-gray-900 mb-3">{s.title}</h2>}
+                     {s.question && <h3 className="text-lg font-bold text-gray-900 mb-2">{s.question}</h3>}
+                     {s.content && <p className="text-gray-600 font-medium leading-relaxed mb-4">{s.content}</p>}
+                     {s.answer && <p className="text-gray-600 font-medium leading-relaxed mb-4">{s.answer}</p>}
+                     {s.text && <p className="text-gray-600 font-medium leading-relaxed mb-4">{s.text}</p>}
+                  </div>
+                ))}
+             </div>
+           ) : (
+             <p className="text-gray-500 font-bold">Aucun contenu disponible pour cette page actuellement.</p>
+           )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PageRecrutement() {

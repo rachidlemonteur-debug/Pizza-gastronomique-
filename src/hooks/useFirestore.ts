@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export function useFirestore(colName: string, orderField: string = 'name', docId?: string) {
+export function useFirestore(colName: string, orderField: string = 'name', docId?: string, limitDocs?: number) {
   const [data, setData] = useState<any[] | any>(docId ? null : []);
   const [loading, setLoading] = useState(true);
 
@@ -18,7 +18,11 @@ export function useFirestore(colName: string, orderField: string = 'name', docId
       });
       return () => unsubscribe();
     } else {
-      const q = query(collection(db, colName), orderBy(orderField));
+      let q = query(collection(db, colName), orderBy(orderField, orderField === 'timestamp' ? 'desc' : 'asc'));
+      if (limitDocs) {
+        q = query(collection(db, colName), orderBy(orderField, orderField === 'timestamp' ? 'desc' : 'asc'), limit(limitDocs));
+      }
+      
       const unsubscribe = onSnapshot(q, (snapshot) => {
         setData(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
         setLoading(false);
@@ -28,7 +32,7 @@ export function useFirestore(colName: string, orderField: string = 'name', docId
       });
       return () => unsubscribe();
     }
-  }, [colName, orderField, docId]);
+  }, [colName, orderField, docId, limitDocs]);
 
   const handleCall = async (fn: () => Promise<any>) => {
     try {

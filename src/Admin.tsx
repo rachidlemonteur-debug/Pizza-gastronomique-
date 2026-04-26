@@ -871,7 +871,7 @@ function AdminOrders({ role }: { role: string | null }) {
   const canceledIds = customStatuses.filter((s:any) => s.isCanceled).map((s:any) => s.id);
   const initialId = customStatuses[0]?.id || 'pending';
 
-  const { data: orders, loading, update, remove } = useFirestore('orders', 'timestamp');
+  const { data: orders, loading, update, remove } = useFirestore('orders', 'timestamp', undefined, 200);
   const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
   const canDelete = ['super_admin', 'admin'].includes(role || '');
   const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'canceled'>('active');
@@ -917,7 +917,9 @@ function AdminOrders({ role }: { role: string | null }) {
   };
 
   const advanceOrderState = (order: any) => {
-    const currentIndex = customStatuses.findIndex((s:any) => s.id === order.status);
+    let currentIndex = customStatuses.findIndex((s:any) => s.id === order.status);
+    if (currentIndex === -1 && (order.status === 'nouvelle' || order.status === 'new')) currentIndex = 0; // Fix existing bugged orders
+
     if (currentIndex >= 0 && currentIndex < customStatuses.length - 1) {
        let nextIndex = currentIndex + 1;
        // Skip delivering if mode is emporter
