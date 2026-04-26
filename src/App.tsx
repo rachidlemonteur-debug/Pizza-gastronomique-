@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
   Menu as MenuIcon, X, ArrowRight, UtensilsCrossed, Timer, 
-  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw
+  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -767,14 +767,16 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [deliveryCoords, setDeliveryCoords] = useState<{lat: number, lng: number} | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
   
   const { add: addOrder } = useFirestore('orders'); // Real-time order syncer
 
   const handleGeolocate = () => {
     if (!navigator.geolocation) {
-      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      setCheckoutError("La géolocalisation n'est pas supportée par votre navigateur.");
       return;
     }
+    setCheckoutError('');
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(async (position) => {
        const lat = position.coords.latitude;
@@ -789,30 +791,35 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
          }
        } catch (err) {
          console.error(err);
-         alert("Position trouvée, mais impossible d'obtenir l'adresse texte.");
+         setCheckoutError("Position trouvée, mais impossible d'obtenir l'adresse texte.");
        } finally {
          setIsLocating(false);
        }
     }, (error) => {
        setIsLocating(false);
-       alert("Impossible d'obtenir votre position. Veuillez entrer l'adresse manuellement.");
+       setCheckoutError("Impossible d'obtenir votre position. Veuillez entrer l'adresse manuellement.");
     });
   };
 
   // Step 3 - Transmission : Simulate server processing, then go to tracking.
   const handleFinalCheckout = async () => {
+    setCheckoutError('');
     if (cart.length === 0) return;
     
     // Validate Form Details
+    if (globalConfig?.isRestaurantOpen === false) {
+       setCheckoutError("Le restaurant est actuellement fermé, commande en ligne suspendue.");
+       return;
+    }
     if (!customerName.trim()) {
-      alert("Veuillez saisir votre nom pour valider la commande.");
+      setCheckoutError("Veuillez saisir votre nom pour valider la commande.");
       return;
     }
     if (!selectedPOS) {
-      alert("Veuillez sélectionner un point de vente avant de commander.");
+      setCheckoutError("Veuillez sélectionner un point de vente avant de commander.");
       return;
     }
-    if (orderMode === 'livraison' && !address.trim()) {
+    if (orderMode === 'livraison' && !address.trim() && !deliveryCoords) {
       setAddressError("Veuillez saisir votre adresse de livraison.");
       return;
     } else {
@@ -823,18 +830,18 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     
     const generatedId = 'CMD-' + Math.floor(1000 + Math.random() * 9000);
     
-    // Default initial status
-    let initialStatus = 'pending';
+    // Initial status
+    let initialStatus = 'nouvelle';
     if (globalConfig?.customStatuses && globalConfig.customStatuses.length > 0) {
        initialStatus = globalConfig.customStatuses[0].id;
     }
 
     const newOrderData: any = {
-       id: generatedId, // Keep for old apps
+       id: generatedId,
        orderNumber: generatedId,
        status: initialStatus,
-       total: getCartTotal(),
-       items: [...cart], // clone to keep items
+       total: getCartTotal() + (orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0),
+       items: [...cart],
        orderMode: orderMode,
        posId: selectedPOS?.id?.toString() || 'unknown',
        posName: selectedPOS?.name || 'Restaurant inconnu',
@@ -845,6 +852,27 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     };
     if (deliveryCoords) newOrderData.deliveryCoords = deliveryCoords;
     if (isLoggedIn && auth.currentUser) newOrderData.userId = auth.currentUser.uid;
+    
+    // Construct WhatsApp message
+    let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*\n\n`;
+    message += `*N° Commande :* ${generatedId}\n`;
+    message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}\n`;
+    if (customerName) message += `*Nom :* ${customerName}\n`;
+    if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}\n`;
+    if (orderMode === 'emporter' && selectedPOS) message += `*Point de vente :* ${selectedPOS.name}\n`;
+    
+    message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
+    cart.forEach(item => {
+      message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})\n`;
+      if (item.instructions) message += `   ↳ _Note: ${item.instructions}_\n`;
+    });
+    
+    message += `\n*--- RÉCAPITULATIF ---*\n`;
+    message += `*Total à payer :* *${formatPriceC(newOrderData.total)}*\n\n`;
+    message += `Merci de valider ma commande ! 👍`;
+    
+    const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
+    window.open(`${baseUrl}?text=${encodeURIComponent(message)}`, '_blank');
     
     // Add to Firestore
     try {
@@ -860,7 +888,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
     } catch (e) {
       console.error("Firebase err:", e);
       setIsProcessing(false);
-      alert("Erreur lors de l'envoi de la commande. Veuillez réessayer.");
+      setCheckoutError("Erreur lors de l'envoi de la commande à nos serveurs.");
     }
   };
 
@@ -958,6 +986,13 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                      Livraison
                    </button>
                  </div>
+                 
+                 {checkoutError && (
+                    <div className="mb-4 bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl text-sm font-bold flex items-center gap-2">
+                       <ShieldAlert className="w-5 h-5 shrink-0" />
+                       <p>{checkoutError}</p>
+                    </div>
+                 )}
 
                  <div className="space-y-3">
                     <input 
@@ -1009,42 +1044,14 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
              </div>
              
              <button 
-               disabled={globalConfig?.isRestaurantOpen === false}
-               onClick={() => {
-                  if (globalConfig?.isRestaurantOpen === false) return;
-                  if (!customerName.trim()) {
-                    alert("Veuillez saisir votre pseudo/nom pour la commande.");
-                    return;
-                  }
-                  if (orderMode === 'livraison' && !address.trim()) {
-                    setAddressError("Veuillez saisir votre adresse de livraison.");
-                    return;
-                  }
-                  
-                  let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*\n\n`;
-                  message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}\n`;
-                  if (customerName) message += `*Nom :* ${customerName}\n`;
-                  if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}\n`;
-                  
-                  message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
-                  cart.forEach(item => {
-                    message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})\n`;
-                    if (item.instructions) message += `   ↳ _Note: ${item.instructions}_\n`;
-                  });
-                  
-                  message += `\n*--- RÉCAPITULATIF ---*\n`;
-                  message += `*Total à payer :* *${formatPriceC(getCartTotal() + (orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0))}*\n\n`;
-                  message += `Merci de valider ma commande ! 👍`;
-                  
-                  const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
-                  window.open(`${baseUrl}?text=${encodeURIComponent(message)}`, '_blank');
-                  
-                  handleFinalCheckout();
-               }}
+               disabled={globalConfig?.isRestaurantOpen === false || isProcessing}
+               onClick={handleFinalCheckout}
                className={`w-full py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 transition-all ${globalConfig?.isRestaurantOpen === false ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-[#25D366] text-white hover:bg-[#1DA851] shadow-[0_10px_20px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#188c43] active:border-b-0 active:translate-y-[5px]'}`}
              >
                 {globalConfig?.isRestaurantOpen === false ? (
                   <>Le Restaurant est Fermé</>
+                ) : isProcessing ? (
+                   <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Validation...</>
                 ) : (
                   <><MessageCircle className="w-6 h-6 border-2 border-white rounded-full p-0.5" /> Commander sur WhatsApp</>
                 )}
@@ -1274,7 +1281,7 @@ function PageMenu() {
 }
 
 function PageLoyalty() {
-  const { formatPriceC, isLoggedIn, setIsLoggedIn, activeOrder } = useCart();
+  const { formatPriceC, isLoggedIn, setIsLoggedIn, activeOrder, addToCart } = useCart();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -1461,7 +1468,7 @@ function PageLoyalty() {
                    {!reward.locked && (
                      <button 
                        onClick={() => {
-                          alert(`Félicitations! Vous avez échangé vos points contre: ${reward.desc}. Retrouvez-le dans votre panier.`);
+                          addToCart({ id: 'reward-'+i, name: reward.desc, price: 0, image: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300&q=80", description: 'Cadeau Fidélité', categoryId: 'rewards', popular: false, badge: 'Cadeau' }, 1);
                           navigate('/menu');
                        }}
                        className="bg-[#DA291C] text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl shadow-[0_4px_10px_rgba(218,41,28,0.3)] hover:scale-105 transition-transform active:scale-95"
