@@ -5,7 +5,7 @@ import { db, auth } from './firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
-  Menu as MenuIcon, X, ArrowRight, UtensilsCrossed, Timer, 
+  Menu as MenuIcon, X, ArrowRight, ArrowLeft, UtensilsCrossed, Timer, 
   Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
@@ -154,7 +154,7 @@ interface CartContextType {
   userCoords: { lat: number, lng: number } | null;
 }
 const CartContext = createContext<CartContextType | null>(null);
-const useCart = () => { const ctx = useContext(CartContext); if (!ctx) throw new Error("Missing CartProvider"); return ctx; };
+export const useCart = () => { const ctx = useContext(CartContext); if (!ctx) throw new Error("Missing CartProvider"); return ctx; };
 
 const AppWithRouter = () => {
   const location = useLocation();
@@ -172,6 +172,7 @@ const AppWithRouter = () => {
                 <Route path="/menu" element={<PageMenu />} />
                 <Route path="/app-fidelite" element={<PageLoyalty />} />
                 <Route path="/restaurants" element={<PageRestaurants />} />
+                <Route path="/tracking/:orderId" element={<PageTracking />} />
                 <Route path="/tracking" element={<PageTracking />} />
                 <Route path="/recrutement" element={<PageRecrutement />} />
                 <Route path="/politique-de-confidentialite" element={<PagePrivacy />} />
@@ -182,6 +183,7 @@ const AppWithRouter = () => {
                 <Route path="/contact" element={<PageContact />} />
                 <Route path="/faq" element={<PageCustomCMS specificKey="faq" title="Foire Aux Questions" />} />
                 <Route path="/p/:pageKey" element={<PageCustomCMS specificKey="" title="Page" />} />
+                <Route path="/checkout" element={<PageCheckout />} />
               </Routes>
             </Layout>
           } />
@@ -192,6 +194,8 @@ const AppWithRouter = () => {
 };
 
 // --- MAIN APP ---
+import { PageCheckout } from './pages/Checkout';
+
 export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<ProductInfo | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1047,16 +1051,17 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
              </div>
              
              <button 
+               onClick={() => {
+                 onClose();
+                 navigate('/checkout');
+               }}
                disabled={globalConfig?.isRestaurantOpen === false || isProcessing}
-               onClick={handleFinalCheckout}
-               className={`w-full py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 transition-all ${globalConfig?.isRestaurantOpen === false ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-[#25D366] text-white hover:bg-[#1DA851] shadow-[0_10px_20px_rgba(37,211,102,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#188c43] active:border-b-0 active:translate-y-[5px]'}`}
+               className={`w-full py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 transition-all ${globalConfig?.isRestaurantOpen === false ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-[#DA291C] text-white hover:bg-red-700 shadow-[0_10px_20px_rgba(218,41,28,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#99140d] active:border-b-0 active:translate-y-[5px]'}`}
              >
                 {globalConfig?.isRestaurantOpen === false ? (
                   <>Le Restaurant est Fermé</>
-                ) : isProcessing ? (
-                   <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Validation...</>
                 ) : (
-                  <><MessageCircle className="w-6 h-6 border-2 border-white rounded-full p-0.5" /> Commander sur WhatsApp</>
+                  <>Commander {formatPriceC(getCartTotal())}</>
                 )}
              </button>
              
@@ -1781,9 +1786,11 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 // --- TRACKING PAGE ---
 function PageTracking() {
   const { activeOrder: localOrder, formatPriceC, whatsappNumber, selectedPOS, globalConfig, setActiveOrder } = useCart();
-  const { data: liveOrder } = useFirestore('orders', 'timestamp', localOrder?.id || 'EMPTY_DOC');
+  const { orderId } = useParams();
   
-  // Use liveOrder if available, otherwise fallback to localOrder
+  const targetId = orderId || localOrder?.id || 'EMPTY_DOC';
+  const { data: liveOrder, loading } = useFirestore('orders', 'timestamp', targetId);
+
   const activeOrder = liveOrder || localOrder;
 
   // Sync back to local storage and cart context state if live order has newer status
@@ -2075,17 +2082,22 @@ function PageTracking() {
                      Signal GPS Connecté
                    </div>
                  )}
-                 <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-4">
-                     <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-3xl shrink-0">👨‍🍳</div>
-                     <div>
-                       <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Votre Livreur</span>
-                       <h3 className="font-black text-gray-900 text-lg leading-tight">Christian T.</h3>
-                       <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /></div>
+                 <div className="flex flex-col gap-2">
+                   <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-4">
+                       <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-3xl shrink-0">👨‍🍳</div>
+                       <div>
+                         <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Votre Livreur</span>
+                         <h3 className="font-black text-gray-900 text-lg leading-tight">Christian T.</h3>
+                         <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /></div>
+                       </div>
                      </div>
+                     <a href="tel:+261340000000" className="bg-[#25D366] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
+                       <Phone className="w-5 h-5 fill-current" />
+                     </a>
                    </div>
-                   <button className="bg-[#DA291C] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
-                     <Phone className="w-5 h-5 fill-current" />
+                   <button onClick={sendToWhatsApp} className="w-full bg-[#DA291C]/10 text-[#DA291C] hover:bg-[#DA291C]/20 py-2 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all">
+                      <AlertTriangle className="w-4 h-4" /> Signaler un problème
                    </button>
                  </div>
               </div>
