@@ -89,22 +89,32 @@ service cloud.firestore {
 
     // -- ORDERS --
     function isValidOrder(data) {
-      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation']) &&
+      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation', 'paymentMethod', 'paymentPhone', 'deliveryTime', 'driver']) &&
              (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
              (!data.keys().hasAny(['total']) || (data.total is number)) &&
              (!data.keys().hasAny(['status']) || (data.status is string)) &&
              (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
              (!data.keys().hasAny(['driverLocation']) || (data.driverLocation is map)) &&
+             (!data.keys().hasAny(['driver']) || (data.driver is map)) &&
              (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100));
     }
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && (isViewer() || true); 
       allow list: if isViewer() || true;
       
-      allow create: if isValidOrder(incoming()) && incoming().keys().hasAll(['customerName', 'total', 'status']);
+      allow create: if isValidOrder(incoming()) && incoming().keys().hasAll(['total', 'status']); // Relaxed 'customerName' as it might be anonymous
       
       // Editor can update, mostly status
-      allow update: if isValidOrder(incoming()) && (isAdmin() || (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation'])));
+      allow update: if isValidOrder(incoming()) && (
+        isAdmin() || 
+        (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation'])) ||
+        // Livreur taking charge from ready
+        (incoming().status == 'delivering' && existing().status == 'ready' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driver'])) ||
+        // Livreur updating location
+        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation'])) ||
+        // Livreur completing
+        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      );
       
       allow delete: if isAdmin();
     }

@@ -184,6 +184,7 @@ const AppWithRouter = () => {
                 <Route path="/faq" element={<PageCustomCMS specificKey="faq" title="Foire Aux Questions" />} />
                 <Route path="/p/:pageKey" element={<PageCustomCMS specificKey="" title="Page" />} />
                 <Route path="/checkout" element={<PageCheckout />} />
+                <Route path="/livreur" element={<PageLivreur />} />
               </Routes>
             </Layout>
           } />
@@ -195,26 +196,30 @@ const AppWithRouter = () => {
 
 // --- MAIN APP ---
 import { PageCheckout } from './pages/Checkout';
+import { PageLivreur } from './pages/Livreur';
 
 export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<ProductInfo | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      const savedCart = localStorage.getItem('gastro_cart');
+      if (savedCart) return JSON.parse(savedCart);
+    }
+    return [];
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [lastAdded, setLastAdded] = useState<string | null>(null);
   const [country, setCountry] = useState<keyof typeof COUNTRIES>('MG');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [activeOrder, setActiveOrder] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const savedOrder = localStorage.getItem('gastro_active_order');
+      if (savedOrder) return JSON.parse(savedOrder);
+    }
+    return null;
+  });
   const [selectedPOS, setSelectedPOS] = useState<any | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
-
-  // Sync state with localstorage
-  useEffect(() => {
-    const savedCart = localStorage.getItem('gastro_cart');
-    if (savedCart) setCart(JSON.parse(savedCart));
-    
-    const savedOrder = localStorage.getItem('gastro_active_order');
-    if (savedOrder) setActiveOrder(JSON.parse(savedOrder));
-  }, []);
 
   useEffect(() => {
     localStorage.setItem('gastro_cart', JSON.stringify(cart));
@@ -584,6 +589,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <Link to="/politique-livraison" className="hover:text-white transition-colors">Politique de livraison</Link>
               <Link to="/faq" className="hover:text-white transition-colors">FAQ</Link>
               <Link to="/contact" className="hover:text-white transition-colors">Support & Contact</Link>
+              <Link to="/livreur" className="hover:text-[#DA291C] font-bold transition-colors">Espace Livreur</Link>
            </div>
            <p>© {new Date().getFullYear()} La Gastronomie Pizza. Tous droits réservés.</p>
          </div>
@@ -1785,7 +1791,7 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 
 // --- TRACKING PAGE ---
 function PageTracking() {
-  const { activeOrder: localOrder, formatPriceC, whatsappNumber, selectedPOS, globalConfig, setActiveOrder } = useCart();
+  const { activeOrder: localOrder, formatPriceC, whatsappNumber, globalPOS, globalConfig, setActiveOrder } = useCart();
   const { orderId } = useParams();
   
   const targetId = orderId || localOrder?.id || 'EMPTY_DOC';
@@ -1801,8 +1807,14 @@ function PageTracking() {
   }, [liveOrder, localOrder, setActiveOrder]);
 
   const navigate = useNavigate();
-  const storePos: [number, number] = [selectedPOS?.lat || -18.910012, selectedPOS?.lng || 47.525581];
-  const destPos: [number, number] = activeOrder?.orderMode === 'livraison' ? [-18.918000, 47.532000] : storePos;
+  
+  const orderPOS = globalPOS?.find(p => p.id === activeOrder?.posId);
+  const storePos: [number, number] = [orderPOS?.lat || -18.910012, orderPOS?.lng || 47.525581];
+  
+  // Simulate delivery destination offset if geocoding isn't available
+  const destPos: [number, number] = activeOrder?.orderMode === 'livraison' 
+      ? [storePos[0] - 0.008, storePos[1] + 0.006] // Offset from store
+      : storePos;
   
   const [pos, setPos] = useState<[number, number]>(storePos);
   const [isLiveGPS, setIsLiveGPS] = useState(false);
@@ -1854,6 +1866,7 @@ function PageTracking() {
     
     if (activeOrder?.driverLocation) {
       setPos([activeOrder.driverLocation.lat, activeOrder.driverLocation.lng]);
+      setIsLiveGPS(true);
       return;
     }
 
@@ -2085,14 +2098,14 @@ function PageTracking() {
                  <div className="flex flex-col gap-2">
                    <div className="flex items-center justify-between">
                      <div className="flex items-center gap-4">
-                       <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-3xl shrink-0">👨‍🍳</div>
+                       <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-3xl shrink-0">🛵</div>
                        <div>
                          <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Votre Livreur</span>
-                         <h3 className="font-black text-gray-900 text-lg leading-tight">Christian T.</h3>
+                         <h3 className="font-black text-gray-900 text-lg leading-tight">{activeOrder.driver?.name || "Assignation..."}</h3>
                          <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /></div>
                        </div>
                      </div>
-                     <a href="tel:+261340000000" className="bg-[#25D366] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
+                     <a href={`tel:${activeOrder.driver?.phone || whatsappNumber}`} className="bg-[#25D366] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
                        <Phone className="w-5 h-5 fill-current" />
                      </a>
                    </div>

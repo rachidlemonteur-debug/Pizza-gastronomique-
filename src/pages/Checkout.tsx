@@ -5,7 +5,7 @@ import { ArrowLeft, CheckCircle2, Phone, CreditCard, Banknote, Clock } from 'luc
 import { useCart } from '../App';
 import { useFirestore } from '../hooks/useFirestore';
 import { auth, db } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection } from 'firebase/firestore';
 
 export function PageCheckout() {
   const { cart, getCartTotal, clearCart, formatPriceC, globalConfig, selectedPOS, activeOrder, setActiveOrder, isLoggedIn } = useCart();
@@ -29,7 +29,12 @@ export function PageCheckout() {
       return;
     }
     
-    if (['mvola', 'orange'].includes(paymentMethod) && !phoneNumber) {
+    if (orderMode === 'livraison' && !address.trim()) {
+      setError("Veuillez saisir votre adresse de livraison.");
+      return;
+    }
+    
+    if (['mvola', 'orange'].includes(paymentMethod) && !phoneNumber.trim()) {
       setError("Veuillez saisir votre numéro de téléphone pour le paiement mobile.");
       return;
     }
@@ -40,15 +45,18 @@ export function PageCheckout() {
     // Simulate payment API call
     setTimeout(async () => {
       try {
-        const generatedId = 'CMD-' + Math.floor(1000 + Math.random() * 9000);
+        const orderRef = doc(collection(db, 'orders'));
+        const orderId = orderRef.id;
+        const shortOrderNum = 'CMD-' + Math.floor(100000 + Math.random() * 900000).toString().substring(0, 4);
+
         let initialStatus = 'pending';
         if (globalConfig?.customStatuses && globalConfig.customStatuses.length > 0) {
            initialStatus = globalConfig.customStatuses[0].id;
         }
 
         const newOrderData: any = {
-           id: generatedId,
-           orderNumber: generatedId,
+           id: orderId,
+           orderNumber: shortOrderNum,
            status: initialStatus,
            total: total,
            items: [...cart],
@@ -64,8 +72,8 @@ export function PageCheckout() {
         
         if (isLoggedIn && auth.currentUser) newOrderData.userId = auth.currentUser.uid;
         
-        // Save to firestore with exact ID
-        await setDoc(doc(db, 'orders', generatedId), newOrderData);
+        // Save to firestore with correct ID
+        await setDoc(orderRef, newOrderData);
         
         setActiveOrder(newOrderData);
         localStorage.setItem('gastro_active_order', JSON.stringify(newOrderData));
@@ -73,10 +81,11 @@ export function PageCheckout() {
         
         setSuccess(true);
         setTimeout(() => {
-          navigate(`/tracking/${generatedId}`);
+          navigate(`/tracking/${orderId}`);
         }, 2000);
       } catch (err) {
-        setError("Une erreur est survenue lors du paiement.");
+        console.error(err);
+        setError("Une erreur est survenue lors du paiement. Veuillez réessayer.");
         setIsProcessing(false);
       }
     }, 1500);

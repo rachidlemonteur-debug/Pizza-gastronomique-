@@ -1,0 +1,16 @@
+# La Gastronomie Pizza - Markdown Mirrors
+
+Ce fichier liste les versions Markdown de chaque page du site, optimisées pour la lecture par les modèles de langage.
+
+- [Accueil - La Gastronomie Pizza](https://www.lagastronomiepizza.com/index.md)
+- [Notre Menu](https://www.lagastronomiepizza.com/menu.md)
+- [Nos Restaurants](https://www.lagastronomiepizza.com/restaurants.md)
+- [Programme de Fidélité](https://www.lagastronomiepizza.com/app-fidelite.md)
+- [À Propos de Nous](https://www.lagastronomiepizza.com/a-propos.md)
+- [Nous Contacter](https://www.lagastronomiepizza.com/contact.md)
+- [Foire Aux Questions](https://www.lagastronomiepizza.com/faq.md)
+- [Recrutement](https://www.lagastronomiepizza.com/recrutement.md)
+- [Politique de Confidentialité](https://www.lagastronomiepizza.com/politique-de-confidentialite.md)
+- [Conditions d'Utilisation](https://www.lagastronomiepizza.com/conditions-utilisation.md)
+- [Politique des Cookies](https://www.lagastronomiepizza.com/politique-cookies.md)
+- [Politique de Livraison](https://www.lagastronomiepizza.com/politique-livraison.md)
