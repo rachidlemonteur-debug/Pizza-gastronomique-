@@ -4,7 +4,7 @@ import {
   BarChart as BarChartIcon, Settings, ShoppingBag, List, Users, 
   LogOut, Plus, Trash2, Edit, Save, X, Eye, 
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
-  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin, FileText, Phone
+  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin, FileText, Phone, Bike
 } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { PRODUCTS, CATEGORIES, RESTAURANTS } from './App';
@@ -94,6 +94,7 @@ export default function AdminApp() {
   const navItems = [
     { name: 'Tableau de bord', path: '/admin', icon: <BarChartIcon className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Commandes', path: '/admin/orders', icon: <ShoppingBag className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
+    { name: 'Livreurs', path: '/admin/drivers', icon: <Bike className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
     { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
@@ -173,6 +174,7 @@ export default function AdminApp() {
            <Routes>
              <Route path="/" element={<Dashboard role={role} />} />
              <Route path="/orders" element={<AdminOrders role={role} />} />
+             <Route path="/drivers" element={['super_admin', 'admin'].includes(role!) ? <AdminDrivers role={role} /> : <NoAccess />} />
              <Route path="/products" element={<AdminProducts role={role} />} />
              <Route path="/categories" element={<AdminCategories role={role} />} />
              <Route path="/pos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPOS role={role} /> : <NoAccess />} />
@@ -857,6 +859,7 @@ const StatsCard = ({ title, value, color, pulse }: any) => (
 
 function AdminOrders({ role }: { role: string | null }) {
   const { data: configs } = useFirestore('config', 'brandName');
+  const { data: drivers } = useFirestore('drivers', 'createdAt');
   const config = configs[0] || {};
   const customStatuses = config.customStatuses || [
     { id: 'pending', label: 'Nouvelle', color: 'bg-red-100 text-red-700 border-red-200', isTerminal: false, isCanceled: false },
@@ -992,6 +995,42 @@ function AdminOrders({ role }: { role: string | null }) {
                     </div>
                   ))}
                 </div>
+
+                {order.orderMode === 'livraison' && (
+                  <div className="mt-4 bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 max-w-sm">
+                     <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                           <Bike className="w-4 h-4" />
+                        </div>
+                        <div>
+                           <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">Livreur Assigné</p>
+                           <p className="font-bold text-gray-900 text-sm">
+                             {order.driver ? order.driver.name : 'Aucun'}
+                           </p>
+                        </div>
+                     </div>
+                     <select 
+                        className="bg-white border border-gray-200 text-gray-900 text-xs font-bold rounded-lg px-2 py-1.5 outline-none cursor-pointer w-full sm:w-auto"
+                        value={order.driver?.id || ''}
+                        onChange={(e) => {
+                           const newDriverId = e.target.value;
+                           if (!newDriverId) {
+                              update(order.id, { driver: null });
+                           } else {
+                              const selected = drivers?.find((d:any) => d.id === newDriverId);
+                              if (selected) {
+                                 update(order.id, { driver: { id: selected.id, name: selected.name, phone: selected.phone } });
+                              }
+                           }
+                        }}
+                     >
+                        <option value="">-- Assigner --</option>
+                        {drivers?.filter((d:any) => d.status === 'active').map((d:any) => (
+                           <option key={d.id} value={d.id}>{d.name} {d.zone ? `(${d.zone})` : ''}</option>
+                        ))}
+                     </select>
+                  </div>
+                )}
               </div>
               
               <div className="flex flex-col lg:items-end justify-between mt-4 lg:mt-0 lg:pl-6 border-t px-2 pt-4 lg:pt-0 lg:px-0 lg:border-t-0 lg:border-l border-gray-100 shrink-0">
@@ -1161,7 +1200,7 @@ function AdminCMS({ role }: { role: string | null }) {
                }
             }} className="space-y-4">
                <div>
-                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Clé de page (ex: 'about', 'faq')</label>
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Clé de page (ex: 'about')</label>
                   <input name="pageKey" defaultValue={editingItem?.pageKey} required className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C]" placeholder="home-hero..." />
                </div>
                <div>
@@ -1360,10 +1399,7 @@ function AdminConfig({ role }: { role: string | null }) {
       seoDesc: e.target.seoDesc.value,
       promoActive: e.target.promoActive.checked,
       promoText: e.target.promoText.value,
-      isRestaurantOpen: e.target.isRestaurantOpen.checked,
-      paymentMvola: e.target.paymentMvola.checked,
-      paymentOrange: e.target.paymentOrange.checked,
-      paymentCash: e.target.paymentCash.checked
+      isRestaurantOpen: e.target.isRestaurantOpen.checked
     };
     if (configs.length === 0) {
       await add(newConfig);
@@ -1476,27 +1512,6 @@ function AdminConfig({ role }: { role: string | null }) {
              <div>
                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Frais de livraison (Ar)</label>
                <input type="number" name="deliveryFee" defaultValue={config.deliveryFee || 0} className="w-full bg-gray-50 border p-3 rounded-xl font-bold font-mono" required />
-             </div>
-           </div>
-
-           {/* SECTION 5 : MODES DE PAIEMENT */}
-           <div className="p-6 rounded-2xl border border-gray-200 bg-white shadow-sm space-y-4">
-             <h3 className="font-black text-lg text-gray-900 mb-4 flex items-center gap-2">💳 Modes de Paiement Actifs</h3>
-             <p className="text-xs text-gray-500 font-bold mb-4">Cochez les moyens de paiement que vous souhaitez proposer à la commande.</p>
-             
-             <div className="flex flex-col gap-3">
-               <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                 <input type="checkbox" name="paymentMvola" defaultChecked={config.paymentMvola !== false} className="w-5 h-5 rounded text-[#DA291C]" />
-                 <span className="font-bold text-gray-800">MVola</span>
-               </label>
-               <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                 <input type="checkbox" name="paymentOrange" defaultChecked={config.paymentOrange !== false} className="w-5 h-5 rounded text-[#DA291C]" />
-                 <span className="font-bold text-gray-800">Orange Money</span>
-               </label>
-               <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                 <input type="checkbox" name="paymentCash" defaultChecked={config.paymentCash !== false} className="w-5 h-5 rounded text-[#DA291C]" />
-                 <span className="font-bold text-gray-800">Espèces / Sur Place (TPE)</span>
-               </label>
              </div>
            </div>
          </div>
@@ -1864,6 +1879,153 @@ function AdminBackups() {
            Pour restaurer les données d'usine, vous devez procéder manuellement via la Console Firebase en raison des règles de sécurité. L'importation directe écraserait les instances en cours (Commandes).
          </p>
       </div>
+    </div>
+  );
+}
+
+function AdminDrivers({ role }: { role: string | null }) {
+  const { data: drivers, loading, add, update, remove } = useFirestore('drivers', 'createdAt');
+  const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState<any>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const driverData = {
+      name: formData.get('name'),
+      phone: formData.get('phone'),
+      zone: formData.get('zone'),
+      status: formData.get('status'),
+      createdAt: isEditing ? isEditing.createdAt : Date.now(),
+    };
+
+    if (isEditing) {
+      await update(isEditing.id, driverData);
+    } else {
+      await add({
+        ...driverData,
+        deliveriesCount: 0,
+        rating: 0,
+        delaysCount: 0
+      });
+    }
+
+    setShowModal(false);
+    setIsEditing(null);
+  };
+
+  const handleEdit = (driver: any) => {
+    setIsEditing(driver);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if(window.confirm('Êtes-vous sûr de vouloir supprimer le livreur : ' + name + ' ?')) {
+      await remove(id);
+    }
+  };
+
+  if (loading) return <div>Chargement...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Gestion des Livreurs</h2>
+          <p className="text-gray-500 font-bold">Ajoutez, modifiez ou suspendez des livreurs.</p>
+        </div>
+        <button onClick={() => { setIsEditing(null); setShowModal(true); }} className="bg-[#DA291C] text-white px-6 py-3 rounded-xl font-bold hover:bg-red-700 transition flex items-center gap-2 shadow-lg shadow-red-500/20">
+          <Plus className="w-5 h-5"/> Ajouter
+        </button>
+      </div>
+
+      <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+         <div className="overflow-x-auto">
+           <table className="w-full text-left border-collapse">
+             <thead>
+               <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest">
+                 <th className="p-4 font-black">Nom & Contact</th>
+                 <th className="p-4 font-black">Zone</th>
+                 <th className="p-4 font-black text-center">Score / Courses</th>
+                 <th className="p-4 font-black text-center">Statut</th>
+                 <th className="p-4 font-black text-right">Actions</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-gray-100">
+               {drivers?.map((driver: any) => (
+                 <tr key={driver.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="p-4">
+                      <div className="font-bold text-gray-900 text-base">{driver.name}</div>
+                      <div className="text-sm font-medium text-gray-500">{driver.phone}</div>
+                    </td>
+                    <td className="p-4">
+                      <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-xs font-bold uppercase">{driver.zone || 'Globale'}</span>
+                    </td>
+                    <td className="p-4 text-center">
+                       <div className="font-black text-gray-900 flex justify-center items-center gap-1">
+                          {driver.rating ? <><Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> {driver.rating}</> : <><Star className="w-4 h-4 text-gray-300" /> -</>}
+                       </div>
+                       <div className="text-xs text-gray-400 font-bold mt-1">{driver.deliveriesCount || 0} courses</div>
+                    </td>
+                    <td className="p-4 text-center">
+                       <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${driver.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                         {driver.status === 'active' ? 'Actif' : 'Inactif'}
+                       </span>
+                    </td>
+                    <td className="p-4 text-right">
+                       <div className="flex justify-end gap-2">
+                         <button onClick={() => handleEdit(driver)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
+                           <Edit className="w-4 h-4" />
+                         </button>
+                         <button onClick={() => handleDelete(driver.id, driver.name)} className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                           <Trash2 className="w-4 h-4" />
+                         </button>
+                       </div>
+                    </td>
+                 </tr>
+               ))}
+               {(!drivers || drivers.length === 0) && (
+                 <tr><td colSpan={5} className="p-8 text-center text-gray-400 font-bold">Aucun livreur trouvé.</td></tr>
+               )}
+             </tbody>
+           </table>
+         </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[2rem] w-full max-w-md p-6 sm:p-8 shadow-2xl relative">
+             <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 p-2 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+             <h3 className="text-2xl font-black text-gray-900 mb-6">{isEditing ? 'Modifier Livreur' : 'Nouveau Livreur'}</h3>
+             
+             <form onSubmit={handleSubmit} className="space-y-4">
+               <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Nom Complet</label>
+                 <input type="text" name="name" defaultValue={isEditing?.name} placeholder="Ex: Jean Rakoto" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:border-[#DA291C] focus:ring-1 focus:ring-[#DA291C]" required />
+               </div>
+               <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Téléphone</label>
+                 <input type="tel" name="phone" defaultValue={isEditing?.phone} placeholder="034 00 000 00" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:border-[#DA291C] focus:ring-1 focus:ring-[#DA291C]" required />
+               </div>
+               <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Zone (Optionnel)</label>
+                 <input type="text" name="zone" defaultValue={isEditing?.zone} placeholder="Ex: Centre-ville" className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:border-[#DA291C] focus:ring-1 focus:ring-[#DA291C]" />
+               </div>
+               <div>
+                 <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Statut</label>
+                 <select name="status" defaultValue={isEditing?.status || 'active'} className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl focus:border-[#DA291C] font-bold">
+                   <option value="active">🟢 Actif</option>
+                   <option value="inactive">🔴 Inactif</option>
+                 </select>
+               </div>
+               
+               <button type="submit" className="w-full bg-[#DA291C] text-white py-4 rounded-xl font-black uppercase text-sm tracking-widest hover:bg-red-700 transition shadow-lg shadow-red-500/20 mt-4">
+                 {isEditing ? 'Mettre à jour' : 'Ajouter le livreur'}
+               </button>
+             </form>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

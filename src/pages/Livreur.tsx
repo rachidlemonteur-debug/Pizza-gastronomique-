@@ -6,12 +6,14 @@ import { useCart } from '../App';
 
 export function PageLivreur() {
   const { data: allOrders, loading, update } = useFirestore('orders', 'timestamp');
+  const { data: drivers } = useFirestore('drivers', 'createdAt');
   const { formatPriceC, globalConfig } = useCart();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'encours' | 'historique'>('encours');
   const [driverIdentity, setDriverIdentity] = useState<{ id: string, name: string, phone: string } | null>(null);
-  const [loginName, setLoginName] = useState('');
+  const [selectedDriverId, setSelectedDriverId] = useState('');
   const [loginPhone, setLoginPhone] = useState('');
+  const [loginError, setLoginError] = useState('');
   const lastLocationUpdate = useRef<number>(0);
 
   useEffect(() => {
@@ -23,10 +25,18 @@ export function PageLivreur() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginName.trim() || !loginPhone.trim()) return;
-    const identity = { id: `driver_${Date.now()}`, name: loginName.trim(), phone: loginPhone.trim() };
+    if (!selectedDriverId || !loginPhone.trim()) return;
+    
+    const driver = drivers?.find((d: any) => d.id === selectedDriverId);
+    if (!driver || driver.phone !== loginPhone.trim()) {
+      setLoginError('Vérifiez votre numéro de téléphone.');
+      return;
+    }
+    
+    const identity = { id: driver.id, name: driver.name, phone: driver.phone };
     localStorage.setItem('gastro_driver_identity', JSON.stringify(identity));
     setDriverIdentity(identity);
+    setLoginError('');
   };
   
   const handleLogout = () => {
@@ -96,28 +106,32 @@ export function PageLivreur() {
            <div className="w-16 h-16 bg-[#DA291C]/10 text-[#DA291C] flex items-center justify-center rounded-2xl mx-auto mb-6">
              <Bike className="w-8 h-8" />
            </div>
-           <h2 className="text-2xl font-black text-center mb-2 uppercase tracking-tight">Identification</h2>
-           <p className="text-center text-gray-500 font-bold text-sm mb-8">Saisissez votre nom pour vous affecter les courses.</p>
+           <h2 className="text-2xl font-black text-center mb-2 uppercase tracking-tight">Espace Livreur</h2>
+           <p className="text-center text-gray-500 font-bold text-sm mb-8">Identifiez-vous pour gérer vos courses.</p>
            
            <form onSubmit={handleLogin} className="space-y-4">
-             <input 
-               type="text" 
-               placeholder="Ex: Livreur 1, Marc..." 
-               value={loginName}
-               onChange={(e) => setLoginName(e.target.value)}
-               className="w-full bg-gray-50 border-2 border-gray-100 focus:border-[#DA291C] focus:ring-0 rounded-xl px-4 py-4 text-center font-bold text-lg transition-all"
+             {loginError && <p className="text-red-500 text-sm font-bold text-center bg-red-50 p-2 rounded-lg">{loginError}</p>}
+             <select 
+               value={selectedDriverId}
+               onChange={(e) => setSelectedDriverId(e.target.value)}
+               className="w-full bg-gray-50 border-2 border-gray-100 focus:border-[#DA291C] focus:ring-0 rounded-xl px-4 py-4 font-bold text-gray-900 transition-all text-center appearance-none"
                required
-             />
+             >
+               <option value="">-- Sélectionnez votre profil --</option>
+               {drivers?.filter((d:any) => d.status === 'active').map((d:any) => (
+                 <option key={d.id} value={d.id}>{d.name} {d.zone ? `(${d.zone})` : ''}</option>
+               ))}
+             </select>
              <input 
                type="tel" 
-               placeholder="Numéro de téléphone (ex: 034...)" 
+               placeholder="Votre numéro (mot de passe)" 
                value={loginPhone}
                onChange={(e) => setLoginPhone(e.target.value)}
                className="w-full bg-gray-50 border-2 border-gray-100 focus:border-[#DA291C] focus:ring-0 rounded-xl px-4 py-4 text-center font-bold text-lg transition-all"
                required
              />
              <button type="submit" className="w-full bg-[#DA291C] text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">
-               Continuer
+               Se connecter
              </button>
            </form>
         </div>

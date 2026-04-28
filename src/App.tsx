@@ -8,7 +8,7 @@ import {
   Menu as MenuIcon, X, ArrowRight, ArrowLeft, UtensilsCrossed, Timer, 
   Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -181,7 +181,6 @@ const AppWithRouter = () => {
                 <Route path="/politique-livraison" element={<PageDelivery />} />
                 <Route path="/a-propos" element={<PageAbout />} />
                 <Route path="/contact" element={<PageContact />} />
-                <Route path="/faq" element={<PageCustomCMS specificKey="faq" title="Foire Aux Questions" />} />
                 <Route path="/p/:pageKey" element={<PageCustomCMS specificKey="" title="Page" />} />
                 <Route path="/checkout" element={<PageCheckout />} />
                 <Route path="/livreur" element={<PageLivreur />} />
@@ -587,7 +586,6 @@ function Layout({ children }: { children: React.ReactNode }) {
               <Link to="/conditions-utilisation" className="hover:text-white transition-colors">CGV & CGU</Link>
               <Link to="/politique-cookies" className="hover:text-white transition-colors">Cookies</Link>
               <Link to="/politique-livraison" className="hover:text-white transition-colors">Politique de livraison</Link>
-              <Link to="/faq" className="hover:text-white transition-colors">FAQ</Link>
               <Link to="/contact" className="hover:text-white transition-colors">Support & Contact</Link>
               <Link to="/livreur" className="hover:text-[#DA291C] font-bold transition-colors">Espace Livreur</Link>
            </div>
@@ -1767,27 +1765,6 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
     </motion.div>
   );
 };
-
-// --- TRACKING PAGE REAL-TIME GPS COMPONENT ---
-function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [number, number], destPos: [number, number], routeCoords?: [number, number][] }) {
-  const mapInstance = useMap();
-  useEffect(() => {
-    if (mapInstance && storePos && destPos) {
-       // Timeout ensures map is fully rendered before calculating bounds
-       setTimeout(() => {
-         mapInstance.invalidateSize();
-         if (routeCoords.length > 0) {
-           mapInstance.fitBounds(routeCoords, { padding: [50, 50], maxZoom: 16 });
-         } else if (storePos[0] !== destPos[0] || storePos[1] !== destPos[1]) {
-           mapInstance.fitBounds([storePos, destPos], { padding: [50, 50], maxZoom: 16 });
-         } else {
-           mapInstance.setView(storePos, 15);
-         }
-       }, 500);
-    }
-  }, [storePos, destPos, routeCoords, mapInstance]);
-  return null;
-}
 
 // --- TRACKING PAGE ---
 function PageTracking() {

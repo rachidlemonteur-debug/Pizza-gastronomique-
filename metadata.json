@@ -1,6 +1,6 @@
 {
-  "name": "Pizza gastronomique ",
-  "description": "",
+  "name": "La Gastronomie Pizza",
+  "description": "Application de commande et livraison pour La Gastronomie Pizza avec interface client, livreur et dashboard administrateur.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": []
 }
