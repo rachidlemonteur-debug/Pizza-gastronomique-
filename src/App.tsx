@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
   Menu as MenuIcon, X, ArrowRight, ArrowLeft, UtensilsCrossed, Timer, 
-  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert
+  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert, PhoneCall
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -355,6 +355,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
+  const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -535,6 +536,23 @@ function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 w-full relative z-10">
         {children}
       </main>
+
+      {/* FLOATING CTA: ETRE RAPPELE */}
+      <div className="fixed bottom-24 sm:bottom-8 right-4 sm:right-8 z-50">
+         <button 
+           onClick={() => setIsCallbackModalOpen(true)}
+           className="bg-gray-900 text-white rounded-full p-4 sm:px-6 sm:py-4 flex items-center gap-3 shadow-[0_10px_30px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all group border-2 border-white"
+         >
+            <PhoneCall className="w-6 h-6 sm:w-5 sm:h-5 group-hover:rotate-12 transition-transform"/>
+            <span className="hidden sm:block font-black uppercase text-sm tracking-widest">Être rappelé</span>
+         </button>
+      </div>
+
+      <AnimatePresence>
+        {isCallbackModalOpen && (
+          <CallbackModal onClose={() => setIsCallbackModalOpen(false)} />
+        )}
+      </AnimatePresence>
 
       {/* RETAIL FOOTER */}
       <footer className="bg-gray-900 text-white pt-16 pb-32 sm:pb-16 mt-12">
@@ -2022,5 +2040,97 @@ function PageRecrutement() {
       <p className="text-gray-500 font-bold mb-8 max-w-lg">Nous préparons quelque chose de grand. Le portail de recrutement sera bientôt disponible en ligne pour trouver nos prochains talents G.</p>
       <button onClick={() => navigate('/')} className="bg-gray-900 text-white px-8 py-3 rounded-xl font-black hover:bg-gray-800 transition-colors">Retour à l'Accueil</button>
     </div>
+  );
+}
+
+function CallbackModal({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<'idle'|'loading'|'success'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('loading');
+    
+    try {
+      const { addDoc, collection, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      await addDoc(collection(db, 'callbacks'), {
+        name,
+        phone,
+        message,
+        status: 'pending',
+        createdAt: Date.now()
+      });
+      setStatus('success');
+      setTimeout(() => {
+        onClose();
+      }, 3000);
+    } catch (err) {
+      console.error(err);
+      setStatus('idle');
+      alert("Erreur lors de l'envoi de votre demande. Veuillez réessayer.");
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+    >
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md relative shadow-2xl"
+      >
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+          <X className="w-5 h-5 text-gray-500" />
+        </button>
+
+        {status === 'success' ? (
+           <div className="text-center py-8">
+             <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+               <CheckCircle className="w-10 h-10" />
+             </div>
+             <h3 className="text-2xl font-black text-gray-900 mb-2">Demande envoyée !</h3>
+             <p className="text-gray-500 font-bold mb-6">Notre équipe va vous rappeler très rapidement sur le numéro que vous avez indiqué.</p>
+             <button onClick={onClose} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-black transition-colors">
+               Fermer
+             </button>
+           </div>
+        ) : (
+           <>
+             <div className="w-16 h-16 bg-red-50 text-[#DA291C] rounded-2xl flex items-center justify-center mb-6">
+               <PhoneCall className="w-8 h-8" />
+             </div>
+             <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Besoin d'aide ?</h3>
+             <p className="text-gray-500 font-bold text-sm mb-8">Laissez-nous vos coordonnées et nous vous rappelons immédiatement.</p>
+
+             <form onSubmit={handleSubmit} className="space-y-4">
+               <div>
+                  <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Votre Nom</label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Jean Rakoto" required className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Votre Numéro</label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="034 00 000 00" required className="w-full bg-gray-50 border-2 border-gray-100 p-4 pl-12 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+                  </div>
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Message (Optionnel)</label>
+                  <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Ex: J'ai une question sur ma commande..." rows={3} className="w-full bg-gray-50 border-2 border-gray-100 p-4 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors max-h-32"></textarea>
+               </div>
+               
+               <button type="submit" disabled={status === 'loading'} className={`w-full text-white py-4 mt-2 rounded-2xl font-black uppercase text-sm tracking-widest shadow-[0_10px_30px_rgba(218,41,28,0.3)] transition-all flex items-center justify-center gap-2 ${status === 'loading' ? 'bg-red-400' : 'bg-[#DA291C] hover:bg-red-800'}`}>
+                 {status === 'loading' ? 'Envoi en cours...' : 'Rappelez-moi !'}
+               </button>
+             </form>
+           </>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }

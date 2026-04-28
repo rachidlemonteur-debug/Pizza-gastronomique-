@@ -4,7 +4,7 @@ import {
   BarChart as BarChartIcon, Settings, ShoppingBag, List, Users, 
   LogOut, Plus, Trash2, Edit, Save, X, Eye, 
   ArrowLeft, Bell, Search, Menu as MenuIcon, Lock,
-  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin, FileText, Phone, Bike
+  Download, UploadCloud, ShieldAlert, Star, Activity, MapPin, FileText, Phone, Bike, PhoneCall
 } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, User, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { PRODUCTS, CATEGORIES, RESTAURANTS } from './App';
@@ -97,6 +97,7 @@ export default function AdminApp() {
     { name: 'Livreurs', path: '/admin/drivers', icon: <Bike className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
     { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
+    { name: 'Demandes Rappel', path: '/admin/callbacks', icon: <PhoneCall className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Promos & Bannières', path: '/admin/promos', icon: <Star className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
@@ -177,6 +178,7 @@ export default function AdminApp() {
              <Route path="/drivers" element={['super_admin', 'admin'].includes(role!) ? <AdminDrivers role={role} /> : <NoAccess />} />
              <Route path="/products" element={<AdminProducts role={role} />} />
              <Route path="/categories" element={<AdminCategories role={role} />} />
+             <Route path="/callbacks" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminCallbacks role={role} /> : <NoAccess />} />
              <Route path="/pos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPOS role={role} /> : <NoAccess />} />
              <Route path="/reviews" element={<AdminReviews role={role} />} />
              <Route path="/promos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPromos role={role} /> : <NoAccess />} />
@@ -2026,6 +2028,109 @@ function AdminDrivers({ role }: { role: string | null }) {
            </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminCallbacks({ role }: { role: string | null }) {
+  const { data: callbacks, update, remove } = useFirestore('callbacks', 'createdAt');
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'processed': return 'bg-blue-100 text-blue-800';
+      case 'converted': return 'bg-green-100 text-green-800';
+      default: return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  const statusOptions = [
+    { value: 'pending', label: 'En attente' },
+    { value: 'processed', label: 'Traité' },
+    { value: 'converted', label: 'Converti' }
+  ];
+
+  const handleUpdateStatus = async (id: string, status: string) => {
+    await update(id, { status });
+  };
+
+  const handleUpdateNotes = async (id: string, notes: string) => {
+    await update(id, { notes });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Voulez-vous vraiment supprimer cette demande ?')) {
+      await remove(id);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Demandes de rappel client</h2>
+        <p className="text-gray-500 font-bold">Gérez les demandes de contact laissées sur le site.</p>
+      </div>
+
+      <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-widest">
+                <th className="p-4 font-black">Date</th>
+                <th className="p-4 font-black">Client</th>
+                <th className="p-4 font-black">Message</th>
+                <th className="p-4 font-black">Statut</th>
+                <th className="p-4 font-black border-l border-gray-100">Notes internes</th>
+                <th className="p-4 font-black text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {callbacks?.map((cb: any) => (
+                <tr key={cb.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="p-4">
+                     <span className="text-sm font-bold text-gray-600">{new Date(cb.createdAt).toLocaleString()}</span>
+                  </td>
+                  <td className="p-4">
+                     <div className="font-bold text-gray-900">{cb.name}</div>
+                     <div className="text-blue-600 font-bold text-sm tracking-widest">
+                       <a href={`tel:${cb.phone}`} className="flex items-center gap-1 hover:underline"><PhoneCall className="w-3 h-3"/> {cb.phone}</a>
+                     </div>
+                  </td>
+                  <td className="p-4 max-w-[200px]">
+                     <p className="text-xs text-gray-500 line-clamp-2" title={cb.message}>{cb.message || '-'}</p>
+                  </td>
+                  <td className="p-4">
+                     <select
+                        onChange={(e) => handleUpdateStatus(cb.id, e.target.value)}
+                        value={cb.status || 'pending'}
+                        className={`text-xs font-black uppercase px-3 py-1 rounded-full cursor-pointer outline-none border-none shadow-sm ${getStatusColor(cb.status || 'pending')}`}
+                     >
+                       {statusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                     </select>
+                  </td>
+                  <td className="p-4 border-l border-gray-100 bg-gray-50/30">
+                     <input 
+                       type="text" 
+                       defaultValue={cb.notes}
+                       placeholder="Ajouter une note..."
+                       onBlur={(e) => handleUpdateNotes(cb.id, e.target.value)}
+                       className="bg-transparent border-b border-gray-200 focus:border-[#DA291C] outline-none text-sm w-full font-medium pb-1"
+                     />
+                  </td>
+                  <td className="p-4 text-right">
+                     <button onClick={() => handleDelete(cb.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                  </td>
+                </tr>
+              ))}
+              {(!callbacks || callbacks.length === 0) && (
+                <tr><td colSpan={6} className="p-8 text-center text-gray-400 font-bold">Aucune demande de rappel.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

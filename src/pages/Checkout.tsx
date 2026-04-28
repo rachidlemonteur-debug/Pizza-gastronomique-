@@ -12,6 +12,7 @@ export function PageCheckout() {
   const navigate = useNavigate();
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('livraison');
+  const [customerName, setCustomerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryTime, setDeliveryTime] = useState('asap');
@@ -21,7 +22,8 @@ export function PageCheckout() {
   
   const { add: addOrder } = useFirestore('orders');
 
-  const total = getCartTotal() + (globalConfig?.deliveryFee || 0);
+  const totalDeliveryFee = orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0;
+  const total = getCartTotal() + totalDeliveryFee;
 
   const handlePayment = async () => {
     if (cart.length === 0) {
@@ -29,6 +31,16 @@ export function PageCheckout() {
       return;
     }
     
+    if (!customerName.trim()) {
+      setError("Veuillez saisir votre nom complet.");
+      return;
+    }
+
+    if (!phoneNumber.trim()) {
+      setError("Veuillez saisir votre numéro de téléphone.");
+      return;
+    }
+
     if (orderMode === 'livraison' && !address.trim()) {
       setError("Veuillez saisir votre adresse de livraison.");
       return;
@@ -58,6 +70,7 @@ export function PageCheckout() {
            orderMode: orderMode,
            address: address || '',
            paymentMethod,
+           customerName,
            paymentPhone: phoneNumber,
            deliveryTime,
            posId: selectedPOS?.id?.toString() || 'unknown',
@@ -111,7 +124,22 @@ export function PageCheckout() {
           
           <div className="space-y-6">
              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <h3 className="font-black text-lg text-gray-900 mb-4">Type de commande</h3>
+                <h3 className="font-black text-lg text-gray-900 mb-4">Vos Coordonnées</h3>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Nom Complet</label>
+                    <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ex: Jean Rakoto" className="w-full bg-gray-50 border-0 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C] font-bold" required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Téléphone</label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="034 00 000 00" className="w-full bg-gray-50 border-0 p-3 pl-10 rounded-xl focus:ring-2 focus:ring-[#DA291C] font-bold" required />
+                    </div>
+                  </div>
+                </div>
+
+                <h3 className="font-black text-lg text-gray-900 mb-4 border-t border-gray-100 pt-6">Type de commande</h3>
                 <div className="flex bg-gray-50 p-1 rounded-xl">
                   <button 
                     onClick={() => setOrderMode('livraison')}
@@ -179,7 +207,7 @@ export function PageCheckout() {
                 </div>
                 <div className="flex justify-between text-gray-500">
                   <span>Frais de livraison</span>
-                  <span>{formatPriceC(globalConfig?.deliveryFee || 0)}</span>
+                  <span>{formatPriceC(totalDeliveryFee)}</span>
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-gray-100 mt-4">
                   <span className="font-black text-gray-900 text-lg">Total</span>
