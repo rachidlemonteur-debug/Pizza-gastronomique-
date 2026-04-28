@@ -64,40 +64,6 @@ export function PageLivreur() {
     ordersRef.current = orders;
   }, [orders]);
 
-  // V3 GPS Tracking
-  useEffect(() => {
-    if (!driverIdentity) return;
-    
-    if ("geolocation" in navigator) {
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const now = Date.now();
-          // Throttle updates to Firebase (max once every 10 seconds per order)
-          if (now - lastLocationUpdate.current > 10000) {
-            lastLocationUpdate.current = now;
-            
-            const activeDeliveries = ordersRef.current?.filter((o: any) => o.status === 'delivering' && o.driver?.id === driverIdentity.id) || [];
-            
-            activeDeliveries.forEach(order => {
-              update(order.id, {
-                driverLocation: {
-                  lat: position.coords.latitude,
-                  lng: position.coords.longitude
-                }
-              }).catch(console.error);
-            });
-          }
-        },
-        (error) => {
-          console.error("GPS Error:", error);
-        },
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
-      );
-      
-      return () => navigator.geolocation.clearWatch(watchId);
-    }
-  }, [driverIdentity, update]);
-
   const statuses = globalConfig?.customStatuses || [
     { id: 'pending', label: 'Nouvelle' },
     { id: 'preparing', label: 'En cuisine' },

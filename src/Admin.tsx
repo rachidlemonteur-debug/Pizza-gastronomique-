@@ -99,7 +99,7 @@ export default function AdminApp() {
     { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
     { name: 'Promos & Bannières', path: '/admin/promos', icon: <Star className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Contenu & FAQ', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
+    { name: 'Contenu', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Statuts Commandes', path: '/admin/statuses', icon: <Activity className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
     { name: 'Configuration', path: '/admin/config', icon: <Settings className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
     { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, allow: ['super_admin'] },
@@ -1360,7 +1360,10 @@ function AdminConfig({ role }: { role: string | null }) {
       seoDesc: e.target.seoDesc.value,
       promoActive: e.target.promoActive.checked,
       promoText: e.target.promoText.value,
-      isRestaurantOpen: e.target.isRestaurantOpen.checked
+      isRestaurantOpen: e.target.isRestaurantOpen.checked,
+      paymentMvola: e.target.paymentMvola.checked,
+      paymentOrange: e.target.paymentOrange.checked,
+      paymentCash: e.target.paymentCash.checked
     };
     if (configs.length === 0) {
       await add(newConfig);
@@ -1473,6 +1476,27 @@ function AdminConfig({ role }: { role: string | null }) {
              <div>
                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Frais de livraison (Ar)</label>
                <input type="number" name="deliveryFee" defaultValue={config.deliveryFee || 0} className="w-full bg-gray-50 border p-3 rounded-xl font-bold font-mono" required />
+             </div>
+           </div>
+
+           {/* SECTION 5 : MODES DE PAIEMENT */}
+           <div className="p-6 rounded-2xl border border-gray-200 bg-white shadow-sm space-y-4">
+             <h3 className="font-black text-lg text-gray-900 mb-4 flex items-center gap-2">💳 Modes de Paiement Actifs</h3>
+             <p className="text-xs text-gray-500 font-bold mb-4">Cochez les moyens de paiement que vous souhaitez proposer à la commande.</p>
+             
+             <div className="flex flex-col gap-3">
+               <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                 <input type="checkbox" name="paymentMvola" defaultChecked={config.paymentMvola !== false} className="w-5 h-5 rounded text-[#DA291C]" />
+                 <span className="font-bold text-gray-800">MVola</span>
+               </label>
+               <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                 <input type="checkbox" name="paymentOrange" defaultChecked={config.paymentOrange !== false} className="w-5 h-5 rounded text-[#DA291C]" />
+                 <span className="font-bold text-gray-800">Orange Money</span>
+               </label>
+               <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                 <input type="checkbox" name="paymentCash" defaultChecked={config.paymentCash !== false} className="w-5 h-5 rounded text-[#DA291C]" />
+                 <span className="font-bold text-gray-800">Espèces / Sur Place (TPE)</span>
+               </label>
              </div>
            </div>
          </div>

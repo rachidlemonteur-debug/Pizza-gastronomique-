@@ -10,7 +10,7 @@ import { doc, setDoc, collection } from 'firebase/firestore';
 export function PageCheckout() {
   const { cart, getCartTotal, clearCart, formatPriceC, globalConfig, selectedPOS, activeOrder, setActiveOrder, isLoggedIn } = useCart();
   const navigate = useNavigate();
-  const [paymentMethod, setPaymentMethod] = useState('mvola');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('livraison');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
@@ -33,7 +33,7 @@ export function PageCheckout() {
       setError("Veuillez saisir votre adresse de livraison.");
       return;
     }
-    
+
     if (['mvola', 'orange'].includes(paymentMethod) && !phoneNumber.trim()) {
       setError("Veuillez saisir votre numéro de téléphone pour le paiement mobile.");
       return;
@@ -144,36 +144,42 @@ export function PageCheckout() {
                 <h3 className="font-black text-lg text-gray-900 mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-[#DA291C]"/> Mode de paiement</h3>
                 
                 <div className="space-y-3">
-                  <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'mvola' ? 'border-[#DA291C] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
-                    <input type="radio" name="payment" value="mvola" checked={paymentMethod === 'mvola'} onChange={(e) => setPaymentMethod(e.target.value)} className="hidden" />
-                    <div className="w-8 h-8 rounded-full bg-green-500 flex flex-shrink-0 items-center justify-center text-white font-black text-xs">MV</div>
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900">MVola</div>
-                      <div className="text-xs text-gray-500">Paiement mobile Telma</div>
-                    </div>
-                  </label>
+                  {globalConfig?.paymentMvola !== false && (
+                    <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'mvola' ? 'border-[#DA291C] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                      <input type="radio" name="payment" value="mvola" checked={paymentMethod === 'mvola'} onChange={(e) => setPaymentMethod(e.target.value)} className="hidden" />
+                      <div className="w-8 h-8 rounded-full bg-green-500 flex flex-shrink-0 items-center justify-center text-white font-black text-xs">MV</div>
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900">MVola</div>
+                        <div className="text-xs text-gray-500">Paiement mobile Telma</div>
+                      </div>
+                    </label>
+                  )}
 
-                  <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'orange' ? 'border-[#DA291C] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
-                    <input type="radio" name="payment" value="orange" checked={paymentMethod === 'orange'} onChange={(e) => setPaymentMethod(e.target.value)} className="hidden" />
-                    <div className="w-8 h-8 rounded-full bg-orange-500 flex flex-shrink-0 items-center justify-center text-white font-black text-xs">OM</div>
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900">Orange Money</div>
-                      <div className="text-xs text-gray-500">Paiement mobile Orange</div>
-                    </div>
-                  </label>
+                  {globalConfig?.paymentOrange !== false && (
+                    <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'orange' ? 'border-[#DA291C] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                      <input type="radio" name="payment" value="orange" checked={paymentMethod === 'orange'} onChange={(e) => setPaymentMethod(e.target.value)} className="hidden" />
+                      <div className="w-8 h-8 rounded-full bg-orange-500 flex flex-shrink-0 items-center justify-center text-white font-black text-xs">OM</div>
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900">Orange Money</div>
+                        <div className="text-xs text-gray-500">Paiement mobile Orange</div>
+                      </div>
+                    </label>
+                  )}
 
-                  <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'cash' ? 'border-[#DA291C] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
-                    <input type="radio" name="payment" value="cash" checked={paymentMethod === 'cash'} onChange={(e) => setPaymentMethod(e.target.value)} className="hidden" />
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex flex-shrink-0 items-center justify-center text-gray-600"><Banknote className="w-4 h-4"/></div>
-                    <div className="flex-1">
-                      <div className="font-bold text-gray-900">Espèces à la livraison</div>
-                      <div className="text-xs text-gray-500">Payez au livreur</div>
-                    </div>
-                  </label>
+                  {globalConfig?.paymentCash !== false && (
+                    <label className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'cash' ? 'border-[#DA291C] bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
+                      <input type="radio" name="payment" value="cash" checked={paymentMethod === 'cash'} onChange={(e) => setPaymentMethod(e.target.value)} className="hidden" />
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex flex-shrink-0 items-center justify-center text-gray-600"><Banknote className="w-4 h-4"/></div>
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900">Paiement à la livraison / Sur place</div>
+                        <div className="text-xs text-gray-500">Espèces ou TPE</div>
+                      </div>
+                    </label>
+                  )}
                 </div>
 
                 {['mvola', 'orange'].includes(paymentMethod) && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t border-gray-100">
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t border-gray-100 overflow-hidden">
                     <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Numéro {paymentMethod === 'mvola' ? 'Telma' : 'Orange'}</label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

@@ -1791,15 +1791,14 @@ function MapAutoUpdater({ storePos, destPos, routeCoords = [] }: { storePos: [nu
 
 // --- TRACKING PAGE ---
 function PageTracking() {
-  const { activeOrder: localOrder, formatPriceC, whatsappNumber, globalPOS, globalConfig, setActiveOrder } = useCart();
+  const { activeOrder: localOrder, formatPriceC, whatsappNumber, globalConfig, setActiveOrder } = useCart();
   const { orderId } = useParams();
   
   const targetId = orderId || localOrder?.id || 'EMPTY_DOC';
-  const { data: liveOrder, loading } = useFirestore('orders', 'timestamp', targetId);
+  const { data: liveOrder } = useFirestore('orders', 'timestamp', targetId);
 
   const activeOrder = liveOrder || localOrder;
 
-  // Sync back to local storage and cart context state if live order has newer status
   useEffect(() => {
      if (liveOrder && localOrder && liveOrder.status !== localOrder.status) {
          setActiveOrder(liveOrder);
@@ -1807,126 +1806,11 @@ function PageTracking() {
   }, [liveOrder, localOrder, setActiveOrder]);
 
   const navigate = useNavigate();
-  
-  const orderPOS = globalPOS?.find(p => p.id === activeOrder?.posId);
-  const storePos: [number, number] = [orderPOS?.lat || -18.910012, orderPOS?.lng || 47.525581];
-  
-  // Simulate delivery destination offset if geocoding isn't available
-  const destPos: [number, number] = activeOrder?.orderMode === 'livraison' 
-      ? [storePos[0] - 0.008, storePos[1] + 0.006] // Offset from store
-      : storePos;
-  
-  const [pos, setPos] = useState<[number, number]>(storePos);
-  const [isLiveGPS, setIsLiveGPS] = useState(false);
-  const [dynamicEta, setDynamicEta] = useState<number>(activeOrder?.etaMinutes || 0);
-  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
-
-  // FETCH REAL ROUTE FROM OPENSTREETMAP (OSRM)
-  useEffect(() => {
-    if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
-    fetch(`https://router.project-osrm.org/route/v1/driving/${storePos[1]},${storePos[0]};${destPos[1]},${destPos[0]}?overview=full&geometries=geojson`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.routes && data.routes[0]) {
-           const coords = data.routes[0].geometry.coordinates.map((c: any) => [c[1], c[0]]);
-           setRouteCoords(coords);
-        }
-      })
-      .catch(err => console.error("OSRM fetch error", err));
-  }, [activeOrder, storePos[0], storePos[1], destPos[0], destPos[1]]);
-
-  // DYNAMIC ETA CALCULATION
-  useEffect(() => {
-     if (activeOrder?.orderMode === 'livraison') {
-       const distMeters = L.latLng(pos).distanceTo(L.latLng(destPos));
-       // Real-time Traffic simulation: 350 meters per minute + 2 mins parking
-       const driveMinutes = Math.max(1, Math.ceil((distMeters / 350) + 2));
-       
-       let totalEta = driveMinutes;
-       
-       const statuses = globalConfig?.customStatuses || [
-           { id: 'pending' }, { id: 'preparing' }, { id: 'ready' }, { id: 'delivering' }, { id: 'completed' }
-       ];
-       const currentIdx = statuses.findIndex((s:any) => s.id === activeOrder.status);
-       
-       // Add fixed times if early in the pipeline (rough generic estimate)
-       if (currentIdx === 0) totalEta += 15;
-       else if (currentIdx === 1) totalEta += 10;
-       else if (currentIdx === 2) totalEta += 5;
-       
-       setDynamicEta(totalEta);
-     } else {
-       setDynamicEta(activeOrder?.etaMinutes || 0);
-     }
-  }, [pos, destPos, activeOrder, globalConfig]);
-
-  // REAL-TIME GPS SIMULATOR ALONG ROADS
-  useEffect(() => {
-    if (!activeOrder || activeOrder.orderMode !== 'livraison') return;
-    
-    if (activeOrder?.driverLocation) {
-      setPos([activeOrder.driverLocation.lat, activeOrder.driverLocation.lng]);
-      setIsLiveGPS(true);
-      return;
-    }
-
-    if (activeOrder.status !== 'delivering' && activeOrder.status !== 'completed') {
-      setPos(storePos);
-      setIsLiveGPS(false);
-      return;
-    }
-
-    let isSubscribed = true;
-    setIsLiveGPS(true); 
-    let t = 0; // Progress from 0 to 1
-    
-    // Animate smoothly over 2 minutes (120 seconds = 120 updates at 1s each)
-    const totalSteps = 120;
-    const progressPerStep = 1 / totalSteps;
-
-    const interval = setInterval(() => {
-      t += progressPerStep;
-      if (t > 1) t = 1;
-      
-      if (isSubscribed) {
-        if (routeCoords.length > 0) {
-           // Interpolate along actual roads
-           const exactFloatIndex = t * (routeCoords.length - 1);
-           const i = Math.floor(exactFloatIndex);
-           const fraction = exactFloatIndex - i;
-           if (i >= routeCoords.length - 1) {
-              setPos(routeCoords[routeCoords.length - 1]);
-           } else {
-              const p1 = routeCoords[i];
-              const p2 = routeCoords[i+1];
-              setPos([
-                  p1[0] + (p2[0] - p1[0]) * fraction,
-                  p1[1] + (p2[1] - p1[1]) * fraction
-              ]);
-           }
-        } else {
-           // Fallback to strict linear if route failed to load
-           const jitterLat = (Math.random() - 0.5) * 0.0002;
-           const jitterLng = (Math.random() - 0.5) * 0.0002;
-           const lat = storePos[0] + (destPos[0] - storePos[0]) * t + (t < 1 ? jitterLat : 0);
-           const lng = storePos[1] + (destPos[1] - storePos[1]) * t + (t < 1 ? jitterLng : 0);
-           setPos([lat, lng]);
-        }
-      }
-      
-      if (t >= 1) clearInterval(interval);
-    }, 1000); 
-
-    return () => {
-      isSubscribed = false;
-      clearInterval(interval);
-    };
-  }, [activeOrder, routeCoords]); // Re-run if we get road coordinates
 
   const sendToWhatsApp = () => {
     if (!activeOrder) return;
     let message = `*🔴 INFOS SUR MA COMMANDE ${activeOrder.orderNumber || activeOrder.id}*\n\n`;
-    message += `*Nom :* ${activeOrder.customerName}\n`;
+    message += `*Nom :* ${activeOrder.customerName || 'Inconnu'}\n`;
     message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
     activeOrder.items.forEach((item: any) => {
       message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})\n`;
@@ -1952,7 +1836,6 @@ function PageTracking() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pb-24 sm:pb-8">
-      {/* Tracker Status Banner */}
       <div className="bg-white border-b border-gray-200 shadow-sm z-20 relative">
         <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex flex-wrap flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -1969,14 +1852,15 @@ function PageTracking() {
                   <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Montant payé</span>
                   <span className="text-xl font-black text-gray-900">{formatPriceC(activeOrder.total)}</span>
                </div>
-               <div className="border-l border-gray-200 pl-6">
-                  <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Heure estimée</span>
-                  <span className="text-xl font-black text-[#25D366] flex items-center gap-1"><Timer className="w-5 h-5"/> {dynamicEta} min</span>
-               </div>
+               {activeOrder.deliveryTime && (
+                 <div className="border-l border-gray-200 pl-6">
+                    <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Heure de passage</span>
+                    <span className="text-xl font-black text-[#25D366] flex items-center gap-1"><Timer className="w-5 h-5"/> {activeOrder.deliveryTime === 'asap' ? 'Rapide (~30m)' : activeOrder.deliveryTime}</span>
+                 </div>
+               )}
             </div>
           </div>
           
-          {/* Tracker Status Progress */}
           <div className="mt-8">
              {(() => {
                 const statuses = globalConfig?.customStatuses || [
@@ -1988,8 +1872,7 @@ function PageTracking() {
                   { id: 'canceled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCanceled: true }
                 ];
 
-                const currentIdx = statuses.findIndex((s:any) => s.id === activeOrder.status);
-                const validStatuses = statuses.filter((s:any) => !s.isCanceled); // typically progress bar ignores canceled state
+                const validStatuses = statuses.filter((s:any) => !s.isCanceled);
                 const currentValidIdx = validStatuses.findIndex((s:any) => s.id === activeOrder.status);
                 const progressPct = currentValidIdx >= 0 ? Math.max(10, ((currentValidIdx + 1) / validStatuses.length) * 100) : 0;
                 
@@ -2020,17 +1903,11 @@ function PageTracking() {
         </div>
       </div>
       
-      {/* Content Grid */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col lg:flex-row gap-8">
         
-        {/* Left Column: Order Details Receipt */}
-        <div className="w-full lg:w-96 flex flex-col gap-6 shrink-0 z-10">
+        <div className="w-full lg:w-96 flex flex-col gap-6 shrink-0 z-10 mx-auto">
            <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-gray-100 relative overflow-hidden">
-             
-             {/* Receipt Visual effect */}
              <div className="absolute top-0 left-0 w-full h-3 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 blur-[1px]"></div>
-             <div className="absolute -left-4 top-1/2 w-8 h-8 rounded-full bg-gray-50 border-r border-gray-100"></div>
-             <div className="absolute -right-4 top-1/2 w-8 h-8 rounded-full bg-gray-50 border-l border-gray-100"></div>
              <div className="border-b-2 border-dashed border-gray-200 absolute top-1/2 left-4 right-4 z-0"></div>
 
              <div className="relative z-10 pb-6 mb-6">
@@ -2039,7 +1916,7 @@ function PageTracking() {
                   <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded-lg text-[10px]">Facture en ligne</span>
                 </h3>
                 <div className="space-y-4">
-                  {activeOrder.items.map((item: any, idx: number) => (
+                  {activeOrder.items?.map((item: any, idx: number) => (
                      <div key={idx} className="flex justify-between items-start text-sm">
                         <div className="max-w-[70%]">
                            <p className="font-black text-gray-800"><span className="text-[#DA291C] mr-1">{item.quantity}x</span> {item.product.name}</p>
@@ -2068,65 +1945,43 @@ function PageTracking() {
              </div>
            </div>
 
-           {/* Support Button */}
            <button onClick={sendToWhatsApp} className="w-full flex items-center justify-center gap-3 bg-[#25D366] text-white py-4 px-6 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-green-500/20 hover:scale-[1.02] active:scale-95 transition-all border-b-[4px] border-green-700 active:border-b-0 active:translate-y-[4px]">
              <MessageCircle className="w-6 h-6" /> Contacter le Support
            </button>
         </div>
 
-        {/* Right Column: Map Content */}
-        <div className="flex-1 flex flex-col min-h-[350px] sm:min-h-[400px]">
-          {activeOrder.orderMode === 'livraison' ? (
-            <div className="bg-white rounded-[2rem] p-2 border border-gray-200 shadow-xl overflow-hidden flex-1 relative min-h-[400px] sm:min-h-[500px]">
-              <MapContainer center={storePos} zoom={14} style={{ height: '100%', width: '100%', borderRadius: '1.75rem' }} zoomControl={false}>
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
-                <Marker position={storePos} icon={storeIcon}><Popup>Restaurant La Gastronomie</Popup></Marker>
-                <Marker position={destPos} icon={homeIcon}><Popup>Adresse de Livraison</Popup></Marker>
-                <Polyline positions={routeCoords.length > 0 ? routeCoords : [storePos, destPos]} pathOptions={{ color: '#DA291C', weight: 4, dashArray: routeCoords.length > 0 ? undefined : '8, 8' }} />
-                <Marker position={pos} icon={bikeIcon}><Popup>Votre livreur est en route !</Popup></Marker>
-                <MapAutoUpdater storePos={storePos} destPos={destPos} routeCoords={routeCoords} />
-              </MapContainer>
-              
-              {/* Overlay Driver Info */}
-              <div className="absolute bottom-6 left-6 right-6 lg:left-auto lg:right-6 lg:w-80 bg-white/95 backdrop-blur-md border border-gray-200 rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.15)] z-[1000] flex flex-col gap-3">
-                 {isLiveGPS && (
-                   <div className="flex items-center gap-2 text-[10px] font-black uppercase text-green-600 bg-green-50 w-fit px-2 py-1 rounded-md tracking-widest border border-green-200">
-                     <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping inline-block"></span>
-                     Signal GPS Connecté
-                   </div>
-                 )}
-                 <div className="flex flex-col gap-2">
+        {activeOrder.orderMode === 'livraison' && activeOrder.driver && (
+            <div className="w-full lg:flex-1 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+                 <h3 className="font-black text-gray-900 uppercase tracking-widest text-lg mb-2">Livreur Assigné</h3>
+                 <div className="flex flex-col gap-4">
                    <div className="flex items-center justify-between">
                      <div className="flex items-center gap-4">
                        <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-3xl shrink-0">🛵</div>
                        <div>
                          <span className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Votre Livreur</span>
-                         <h3 className="font-black text-gray-900 text-lg leading-tight">{activeOrder.driver?.name || "Assignation..."}</h3>
-                         <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /><Star className="w-3 h-3 fill-[#FFC72C]" /></div>
+                         <h3 className="font-black text-gray-900 text-lg leading-tight">{activeOrder.driver?.name}</h3>
+                         <div className="flex items-center gap-1 text-[#FFC72C] mt-0.5"><Star className="w-4 h-4 fill-[#FFC72C]" /><Star className="w-4 h-4 fill-[#FFC72C]" /><Star className="w-4 h-4 fill-[#FFC72C]" /><Star className="w-4 h-4 fill-[#FFC72C]" /><Star className="w-4 h-4 fill-[#FFC72C]" /></div>
                        </div>
                      </div>
                      <a href={`tel:${activeOrder.driver?.phone || whatsappNumber}`} className="bg-[#25D366] p-3 rounded-full text-white shadow-md active:scale-90 transition-transform">
                        <Phone className="w-5 h-5 fill-current" />
                      </a>
                    </div>
-                   <button onClick={sendToWhatsApp} className="w-full bg-[#DA291C]/10 text-[#DA291C] hover:bg-[#DA291C]/20 py-2 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all">
-                      <AlertTriangle className="w-4 h-4" /> Signaler un problème
-                   </button>
                  </div>
-              </div>
             </div>
-          ) : (
-            <div className="bg-white rounded-3xl p-10 border border-gray-200 shadow-xl text-center flex flex-col items-center justify-center h-full">
+        )}
+
+        {activeOrder.orderMode === 'emporter' && (
+            <div className="w-full lg:flex-1 bg-white rounded-3xl p-10 border border-gray-200 shadow-xl text-center flex flex-col items-center justify-center h-full">
               <ShoppingBag className="w-24 h-24 text-[#DA291C] mb-8" />
               <h2 className="text-4xl font-black text-gray-900 uppercase tracking-tight mb-4">Préparation en cours</h2>
-              <p className="text-gray-500 font-bold mb-8 max-w-lg text-lg">Veuillez vous présenter au comptoir du restaurant avec le numéro de commande de manière à récupérer votre commande chaude.</p>
-              <div className="bg-gray-50 border border-gray-200 px-10 py-8 rounded-3xl">
+              <p className="text-gray-500 font-bold mb-8 max-w-lg text-lg">Veuillez vous présenter au comptoir du restaurant {activeOrder.posId ? `(${activeOrder.posId})` : ''} avec le numéro de commande pour récupérer votre commande.</p>
+              <div className="bg-gray-50 border border-gray-200 px-10 py-8 rounded-3xl w-full">
                  <span className="text-sm font-black uppercase text-gray-400 block mb-2">Code de Retrait</span>
-                 <span className="text-5xl font-black text-gray-900 tracking-widest">{activeOrder.orderNumber || activeOrder.id}</span>
+                 <span className="text-5xl font-black text-gray-900 tracking-widest">{activeOrder.orderNumber || activeOrder.id?.slice(-4).toUpperCase()}</span>
               </div>
             </div>
-          )}
-        </div>
+        )}
       </div>
 
     </div>
