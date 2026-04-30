@@ -742,9 +742,11 @@ function Dashboard({ role }: { role: string | null }) {
 
   const { data: orders, loading: ordersLoading } = useFirestore('orders', 'timestamp');
   const { data: products, loading: productsLoading } = useFirestore('products');
+  const { data: categories, loading: categoriesLoading } = useFirestore('categories');
+  const { data: drivers } = useFirestore('drivers');
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('week');
   
-  if (ordersLoading || productsLoading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
+  if (ordersLoading || productsLoading || categoriesLoading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
 
   const today = new Date();
   
@@ -777,6 +779,9 @@ function Dashboard({ role }: { role: string | null }) {
 
   // Top Products Math
   const productCount: Record<string, number> = {};
+  const categoryCount: Record<string, number> = {};
+  const driverPerformance: Record<string, { deliveries: number, totalTime: number, ratingSum: number, ratingCount: number }> = {};
+
   filteredOrders.forEach((o: any) => {
      if (o.items && Array.isArray(o.items)) {
         o.items.forEach((item: any) => {
@@ -786,7 +791,22 @@ function Dashboard({ role }: { role: string | null }) {
                if (name.length > 20) name = name.substring(0, 20) + '...';
                productCount[name] = (productCount[name] || 0) + item.quantity;
            }
+           
+           if (item.product && item.product.categoryId) {
+               let catData = categories?.find((c:any) => c.id === item.product.categoryId || 'cat_' + c.id === item.product.categoryId);
+               let catName = catData?.name || 'Autres';
+               categoryCount[catName] = (categoryCount[catName] || 0) + item.quantity;
+           }
         });
+     }
+
+     // Driver Math
+     if (o.driver && o.driver.id && o.status === 'completed') {
+       if (!driverPerformance[o.driver.id]) {
+         driverPerformance[o.driver.id] = { deliveries: 0, totalTime: 0, ratingSum: 0, ratingCount: 0 };
+       }
+       driverPerformance[o.driver.id].deliveries++;
+       // Mocking time/rating logic if missing, just counting deliveries for now
      }
   });
 
@@ -794,6 +814,14 @@ function Dashboard({ role }: { role: string | null }) {
      .sort((a, b) => b[1] - a[1]) // Sort descending
      .slice(0, 7) // Top 7 
      .map(([name, qty]) => ({ name, Ventes: qty }));
+
+  const chartDataCategories = Object.entries(categoryCount)
+     .sort((a, b) => b[1] - a[1]) // Sort descending
+     .map(([name, qty]) => ({ name, Ventes: qty }));
+  
+  const topDrivers = Object.entries(driverPerformance)
+     .sort((a, b) => b[1].deliveries - a[1].deliveries)
+     .slice(0, 5);
 
   return (
     <div>
@@ -844,6 +872,59 @@ function Dashboard({ role }: { role: string | null }) {
                  <Bar dataKey="Ventes" fill="#FFC72C" radius={[0, 8, 8, 0]} barSize={24} />
                </BarChart>
              </ResponsiveContainer>
+           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Top Categories Chart */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
+           <h3 className="font-black text-gray-900 mb-6 uppercase tracking-widest">Top Catégories</h3>
+           <div className="h-[300px] w-full">
+             <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={chartDataCategories} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 'bold' }} dy={10} />
+                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 'bold' }} />
+                 <RechartsTooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }} />
+                 <Bar dataKey="Ventes" fill="#DA291C" radius={[8, 8, 0, 0]} barSize={32} />
+               </BarChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
+
+        {/* Top Drivers List */}
+        <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex flex-col">
+           <h3 className="font-black text-gray-900 mb-6 uppercase tracking-widest">Performances Livreurs ({period})</h3>
+           <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+              {topDrivers.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-gray-400 font-bold">Aucune donnée livreur.</div>
+              ) : (
+                topDrivers.map(([driverId, stats]: [string, any], idx: number) => {
+                  const driverInfo = drivers?.find((d:any) => d.id === driverId);
+                  const dName = driverInfo?.name || `Livreur ${driverId.substring(0,4)}`;
+                  return (
+                    <div key={driverId} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg ${idx === 0 ? 'bg-[#FFC72C] text-white shadow-md' : 'bg-gray-200 text-gray-500'}`}>
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <div className="font-black text-gray-900 sm:text-lg">{dName}</div>
+                          <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">{stats.deliveries} courses livrées</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {driverInfo?.status === 'active' ? (
+                          <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-md font-black uppercase tracking-widest">Actif</span>
+                        ) : (
+                          <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-md font-black uppercase tracking-widest">Inactif</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
            </div>
         </div>
       </div>
@@ -1763,37 +1844,44 @@ function AdminPOS({ role }: { role: string | null }) {
 function AdminReviews({ role }: { role: string | null }) {
   const { data: reviews, loading, update, remove } = useFirestore('reviews', 'createdAt');
   const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const [activeTab, setActiveTab] = useState<'client_to_driver' | 'driver_to_client' | 'platform'>('client_to_driver');
 
   return (
     <div className="space-y-6">
-      <h2 className="font-black text-2xl text-gray-900 border-b pb-4">Avis Clients</h2>
+      <h2 className="font-black text-2xl text-gray-900 border-b pb-4">Avis & Évaluations</h2>
+
+      <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-max">
+         <button onClick={() => setActiveTab('client_to_driver')} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${activeTab === 'client_to_driver' ? 'bg-white shadow-sm text-[#DA291C]' : 'text-gray-500 hover:text-gray-900'}`}>Clients ➔ Livreurs</button>
+         <button onClick={() => setActiveTab('driver_to_client')} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${activeTab === 'driver_to_client' ? 'bg-white shadow-sm text-[#DA291C]' : 'text-gray-500 hover:text-gray-900'}`}>Livreurs ➔ Clients</button>
+         <button onClick={() => setActiveTab('platform')} className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${activeTab === 'platform' ? 'bg-white shadow-sm text-[#DA291C]' : 'text-gray-500 hover:text-gray-900'}`}>Sur l'Application</button>
+      </div>
+
       <div className="grid gap-4">
-         {reviews.map((r: any) => (
+         {reviews.filter((r:any) => r.type === activeTab).map((r: any) => (
            <div key={r.id} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                 <div className="flex items-center gap-2 mb-1">
-                    <span className="font-black text-gray-900">{r.customerName}</span>
-                    <div className="flex text-yellow-500">
-                       {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < r.rating ? 'fill-current' : 'text-gray-300'}`} />)}
+                 <div className="flex items-center gap-2 mb-2">
+                    <span className="font-black text-gray-900 bg-gray-100 px-2 py-1 rounded-md text-xs uppercase tracking-widest">{activeTab === 'client_to_driver' ? `Client ➔ Livreur: ${r.driverId}` : activeTab === 'driver_to_client' ? `Livreur: ${r.driverId} ➔ Client` : 'Client'}</span>
+                    <div className="flex text-[#FFC72C]">
+                       {[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < r.rating ? 'fill-current' : 'text-gray-200'}`} />)}
                     </div>
                  </div>
-                 <p className="text-sm font-bold text-gray-600">{r.comment}</p>
-                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2 block">{new Date(r.createdAt).toLocaleDateString()}</span>
+                 {r.tags && r.tags.length > 0 && (
+                   <div className="flex gap-2 mb-2">
+                     {r.tags.map((t: string) => <span key={t} className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{t}</span>)}
+                   </div>
+                 )}
+                 <p className="text-sm font-bold text-gray-600 italic">"{r.comment || 'Aucun commentaire'}"</p>
+                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2 block">{new Date(r.createdAt).toLocaleString()} {r.orderId && `| CMD: ${r.orderId}`}</span>
               </div>
               {canEdit && (
                 <div className="flex gap-2">
-                   <button 
-                     onClick={() => update(r.id, { isApproved: !r.isApproved })}
-                     className={`px-4 py-2 rounded-lg font-black text-xs uppercase transition-all ${r.isApproved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-green-50'}`}
-                   >
-                     {r.isApproved ? '✅ Approuvé' : 'Approuver'}
-                   </button>
-                   <button onClick={() => { logActivity('SUPPR_AVIS', r.customerName); remove(r.id); }} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                   <button onClick={() => remove(r.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                 </div>
               )}
            </div>
          ))}
-         {reviews.length === 0 && <p className="text-gray-500 font-bold p-12 text-center bg-gray-50 border-2 border-dashed rounded-3xl">Aucun avis client pour le moment.</p>}
+         {reviews.filter((r:any) => r.type === activeTab).length === 0 && <p className="text-gray-500 font-bold p-12 text-center bg-gray-50 border-2 border-dashed rounded-3xl">Aucun avis dans cette catégorie.</p>}
       </div>
     </div>
   );

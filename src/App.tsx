@@ -356,8 +356,15 @@ function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
+  const [isPlatformRatingOpen, setIsPlatformRatingOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleOpenRating = () => setIsPlatformRatingOpen(true);
+    window.addEventListener('open-platform-rating', handleOpenRating);
+    return () => window.removeEventListener('open-platform-rating', handleOpenRating);
+  }, []);
 
   useEffect(() => {
     if (globalConfig?.seoTitle) {
@@ -563,6 +570,14 @@ function Layout({ children }: { children: React.ReactNode }) {
                  <span className="font-black text-3xl text-[#FFC72C] leading-none tracking-tighter">G.</span>
               </div>
               <p className="text-gray-400 font-bold mb-4">Le leader incontesté de la restauration rapide (QSR) avec La Gastronomie {currentCountry.name}.</p>
+              <button 
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-platform-rating'));
+                }}
+                className="bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-colors border border-gray-700 mt-4"
+              >
+                <Star className="w-4 h-4 text-[#FFC72C] fill-[#FFC72C]" /> Notez notre application
+              </button>
             </div>
             
             <div>
@@ -1979,8 +1994,121 @@ function PageTracking() {
         )}
       </div>
 
+      {activeOrder.status === 'completed' && !activeOrder.clientHasRated && (
+        <ClientRatingModal activeOrder={activeOrder} />
+      )}
     </div>
   )
+}
+
+function ClientRatingModal({ activeOrder }: { activeOrder: any }) {
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [step, setStep] = useState(1);
+  const [status, setStatus] = useState<'idle'|'loading'|'success'>('idle');
+  const availableTags = ['Rapide', 'Poli', 'Professionnel', 'En retard', 'Problème de livraison', 'Plats parfaits'];
+
+  const toggleTag = (tag: string) => {
+    setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
+  const handleSubmit = async () => {
+    if (rating === 0) return;
+    setStatus('loading');
+    try {
+      const { addDoc, doc, updateDoc, collection, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      
+      // Add review
+      await addDoc(collection(db, 'reviews'), {
+        type: 'client_to_driver',
+        orderId: activeOrder.id,
+        driverId: activeOrder.driver?.id || null,
+        rating,
+        comment,
+        tags,
+        createdAt: Date.now()
+      });
+
+      // Update order to prevent showing again
+      await updateDoc(doc(db, 'orders', activeOrder.id), {
+        clientHasRated: true
+      });
+
+      setStatus('success');
+    } catch (e) {
+      console.error(e);
+      setStatus('idle');
+    }
+  };
+
+  if (status === 'success') return null;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+    >
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md shadow-2xl relative"
+      >
+         <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2 text-center">Notez votre livraison</h3>
+         <p className="text-center text-gray-500 font-bold mb-8">Comment s'est passée votre livraison avec {activeOrder.driver?.name || 'votre livreur'} ?</p>
+         
+         {step === 1 && (
+           <div className="flex flex-col items-center">
+             <div className="flex gap-2 mb-8">
+               {[1, 2, 3, 4, 5].map((star) => (
+                 <button 
+                   key={star}
+                   onMouseEnter={() => setHoverRating(star)}
+                   onMouseLeave={() => setHoverRating(0)}
+                   onClick={() => { setRating(star); setStep(2); }}
+                   className="p-1 transition-transform hover:scale-110"
+                 >
+                   <Star className={`w-12 h-12 ${star <= (hoverRating || rating) ? 'fill-[#FFC72C] text-[#FFC72C]' : 'text-gray-200'}`} />
+                 </button>
+               ))}
+             </div>
+             {rating === 0 && <p className="text-sm font-bold text-gray-400">Touchez une étoile pour noter</p>}
+           </div>
+         )}
+
+         {step === 2 && (
+           <div className="flex flex-col">
+             <div className="flex flex-wrap gap-2 mb-6">
+                {availableTags.map(tag => (
+                   <button 
+                      key={tag} 
+                      onClick={() => toggleTag(tag)}
+                      className={`px-4 py-2 rounded-full font-bold text-sm transition-all ${tags.includes(tag) ? 'bg-[#DA291C] text-white border-transparent' : 'bg-white border-2 border-gray-100 text-gray-500 hover:border-gray-200'}`}
+                   >
+                     {tag}
+                   </button>
+                ))}
+             </div>
+             <textarea 
+               value={comment}
+               onChange={(e) => setComment(e.target.value)}
+               placeholder="Un commentaire particulier ? (Optionnel)"
+               className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-4 font-bold text-gray-900 focus:border-[#DA291C] focus:ring-0 mb-6 min-h-[100px] outline-none"
+             />
+             <button 
+               onClick={handleSubmit} 
+               disabled={status === 'loading'}
+               className="w-full bg-gray-900 text-white rounded-xl py-4 font-black uppercase tracking-widest hover:bg-black transition-colors"
+             >
+               {status === 'loading' ? 'Envoi...' : 'Envoyer mon avis'}
+             </button>
+           </div>
+         )}
+      </motion.div>
+    </motion.div>
+  );
 }
 
 function PageCustomCMS({ specificKey, title }: { specificKey: string, title: string }) {
@@ -2130,6 +2258,100 @@ function CallbackModal({ onClose }: { onClose: () => void }) {
              </form>
            </>
         )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function PlatformRatingModal({ onClose }: { onClose: () => void }) {
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [status, setStatus] = useState<'idle'|'loading'|'success'>('idle');
+
+  const handleSubmit = async () => {
+    if (rating === 0) return;
+    setStatus('loading');
+    try {
+      const { addDoc, collection, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      
+      await addDoc(collection(db, 'reviews'), {
+        type: 'platform',
+        rating,
+        comment,
+        createdAt: Date.now()
+      });
+
+      setStatus('success');
+      setTimeout(() => {
+        onClose();
+      }, 3000);
+    } catch (e) {
+      console.error(e);
+      setStatus('idle');
+      alert("Erreur lors de l'envoi de votre avis. Veuillez réessayer.");
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+    >
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md shadow-2xl relative"
+      >
+         <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X className="w-5 h-5 text-gray-500"/></button>
+         
+         {status === 'success' ? (
+           <div className="text-center py-8">
+             <CheckCircle className="w-16 h-16 text-[#25D366] mx-auto mb-4" />
+             <h3 className="text-2xl font-black text-gray-900 mb-2">Merci pour votre avis !</h3>
+             <p className="text-gray-500 font-bold mb-6">Votre avis compte beaucoup pour nous aider à améliorer La Gastronomie Pizza.</p>
+           </div>
+         ) : (
+           <>
+             <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2 text-center">Notez notre App</h3>
+             <p className="text-center text-gray-500 font-bold mb-8 text-sm">Que pensez-vous de la plateforme La Gastronomie ?</p>
+             
+             <div className="flex flex-col items-center">
+               <div className="flex gap-2 mb-8">
+                 {[1, 2, 3, 4, 5].map((star) => (
+                   <button 
+                     key={star}
+                     onMouseEnter={() => setHoverRating(star)}
+                     onMouseLeave={() => setHoverRating(0)}
+                     onClick={() => setRating(star)}
+                     className="p-1 transition-transform hover:scale-110 active:scale-95"
+                   >
+                     <Star className={`w-12 h-12 ${star <= (hoverRating || rating) ? 'fill-[#FFC72C] text-[#FFC72C]' : 'text-gray-200'}`} />
+                   </button>
+                 ))}
+               </div>
+               
+               {rating > 0 && (
+                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full">
+                   <textarea 
+                     value={comment}
+                     onChange={(e) => setComment(e.target.value)}
+                     placeholder="Un commentaire pour nous améliorer ?"
+                     className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-4 font-bold text-gray-900 focus:border-[#DA291C] focus:ring-0 mb-6 min-h-[100px] outline-none"
+                   />
+                   <button 
+                     onClick={handleSubmit} 
+                     disabled={status === 'loading'}
+                     className="w-full bg-[#DA291C] text-white rounded-2xl py-4 font-black uppercase tracking-widest hover:bg-red-800 transition-colors shadow-lg shadow-red-500/20 active:scale-95"
+                   >
+                     {status === 'loading' ? 'Envoi...' : 'Envoyer mon avis'}
+                   </button>
+                 </motion.div>
+               )}
+             </div>
+           </>
+         )}
       </motion.div>
     </motion.div>
   );
