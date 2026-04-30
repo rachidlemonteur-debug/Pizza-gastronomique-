@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useDeferredValue, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';                
 import { db, auth } from './firebase';
@@ -1259,17 +1259,24 @@ function PageHome() {
 function PageMenu() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   
   const { globalProducts: products, globalCategories: categories } = useCart();
   const isLoading = products.length === 0 && categories.length === 0;
 
-  const filteredProducts = products.filter((p: any) => p.isAvailable !== false).filter((p: any) => {
-    if (searchQuery.trim() !== '') {
-      return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase());
-    }
-    if (activeCategory === 'all') return true;
-    return p.categoryId === activeCategory;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter((p: any) => p.isAvailable !== false).filter((p: any) => {
+      if (deferredSearchQuery.trim() !== '') {
+        return p.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) || p.description.toLowerCase().includes(deferredSearchQuery.toLowerCase());
+      }
+      if (activeCategory === 'all') return true;
+      return p.categoryId === activeCategory;
+    });
+  }, [products, deferredSearchQuery, activeCategory]);
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen pb-32">
@@ -1280,23 +1287,31 @@ function PageMenu() {
           <div className="flex overflow-x-auto hide-scrollbar gap-3 py-4">
             <button 
               onClick={() => { setActiveCategory('all'); setSearchQuery(''); }} 
-              className={`flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none border-2 shrink-0 ${activeCategory === 'all' && !searchQuery ? 'bg-[#FFC72C] border-yellow-400 text-gray-900 shadow-md transform scale-105' : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:border-gray-200'}`}
+              className={`relative flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none shrink-0 ${activeCategory === 'all' && !searchQuery ? 'text-gray-900 border-none' : 'bg-white border-2 border-gray-100 text-gray-500 hover:bg-gray-50'}`}
             >
-              <span className="text-3xl filter drop-shadow-sm">🍽️</span>
-              <span className="font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">Tous</span>
+              {activeCategory === 'all' && !searchQuery && (
+                <motion.div layoutId="activeCategoryBg" className="absolute inset-0 bg-[#FFC72C] rounded-[1.25rem] shadow-md z-0" />
+              )}
+              <span className="relative z-10 text-3xl filter drop-shadow-sm">🍽️</span>
+              <span className="relative z-10 font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">Tous</span>
             </button>
             {categories.map((cat: any) => (
                 <button 
                   key={cat.id} 
                   onClick={() => { setActiveCategory(cat.id); setSearchQuery(''); }} 
-                  className={`flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none border-2 shrink-0 ${activeCategory === cat.id && !searchQuery ? 'bg-[#FFC72C] border-yellow-400 text-gray-900 shadow-md transform scale-105' : 'bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:border-gray-200'}`}
+                  className={`relative flex flex-col items-center justify-center gap-2 w-[104px] h-[88px] rounded-[1.25rem] transition-all outline-none shrink-0 ${activeCategory === cat.id && !searchQuery ? 'text-gray-900 border-none' : 'bg-white border-2 border-gray-100 text-gray-500 hover:bg-gray-50'}`}
                 >
-                  {cat.icon?.startsWith('http') || cat.icon?.startsWith('data:image') ? (
-                    <img src={cat.icon} alt={cat.name} className="w-8 h-8 object-contain drop-shadow-sm" />
-                  ) : (
-                    <span className="text-3xl filter drop-shadow-sm">{cat.icon || '🍔'}</span>
+                  {activeCategory === cat.id && !searchQuery && (
+                    <motion.div layoutId="activeCategoryBg" className="absolute inset-0 bg-[#FFC72C] rounded-[1.25rem] shadow-md z-0" />
                   )}
-                  <span className="font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">{cat.name}</span>
+                  <div className="relative z-10 flex flex-col items-center justify-center gap-2">
+                    {cat.icon?.startsWith('http') || cat.icon?.startsWith('data:image') ? (
+                      <img src={cat.icon} alt={cat.name} className="w-8 h-8 object-contain drop-shadow-sm" />
+                    ) : (
+                      <span className="text-3xl filter drop-shadow-sm">{cat.icon || '🍔'}</span>
+                    )}
+                    <span className="font-black text-[10px] uppercase tracking-wider text-center leading-tight whitespace-pre-wrap">{cat.name}</span>
+                  </div>
                 </button>
             ))}
           </div>
@@ -1305,21 +1320,29 @@ function PageMenu() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         
         {/* Search Bar */}
-        <div className="mb-8 relative max-w-xl">
+        <div className="mb-8 relative max-w-xl mx-auto md:mx-0">
            <input 
              type="text" 
              placeholder="Rechercher un burger, une pizza..." 
              value={searchQuery}
              onChange={(e) => setSearchQuery(e.target.value)}
-             className="w-full bg-white border-2 border-gray-200 p-4 pl-12 rounded-2xl font-bold text-gray-900 placeholder-gray-400 focus:border-[#DA291C] focus:ring-4 focus:ring-red-50 outline-none transition-all shadow-sm"
+             className="w-full bg-white border-2 border-gray-200 p-4 pl-12 pr-12 rounded-2xl font-bold text-gray-900 placeholder-gray-400 focus:border-[#DA291C] focus:ring-4 focus:ring-red-50 outline-none transition-all shadow-sm"
            />
-           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
              <Search className="w-6 h-6"/> 
            </div>
+           {searchQuery && (
+             <button 
+               onClick={handleClearSearch}
+               className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#DA291C] transition-colors p-1"
+             >
+               <X className="w-5 h-5"/>
+             </button>
+           )}
         </div>
 
-        <h1 className="font-black text-4xl uppercase tracking-tight text-gray-900 mb-8 border-l-8 border-[#DA291C] pl-4">
-          {searchQuery ? 'Résultats de recherche' : CATEGORIES.find(c => c.id === activeCategory)?.name}
+        <h1 className="font-black text-3xl sm:text-4xl uppercase tracking-tight text-gray-900 mb-8 border-l-8 border-[#DA291C] pl-4">
+          {searchQuery ? 'Résultats de recherche' : (categories.find((c: any) => c.id === activeCategory)?.name || 'Tous nos produits')}
         </h1>
         
         {isLoading ? (
@@ -1328,16 +1351,28 @@ function PageMenu() {
             <p className="font-bold text-gray-500 uppercase tracking-widest text-sm">Chargement du Menu...</p>
           </div>
         ) : filteredProducts.length === 0 ? (
-           <div className="py-20 text-center">
-             <span className="text-6xl mb-4 block">🥺</span>
-             <h3 className="font-black text-2xl text-gray-900 mb-2">Aucun résultat</h3>
-             <p className="font-bold text-gray-500">Nous n'avons pas trouvé ce que vous cherchez.</p>
-           </div>
+           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="py-20 text-center">
+             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+               <span className="text-4xl opacity-50 block">🔍</span>
+             </div>
+             <h3 className="font-black text-2xl text-gray-900 mb-2">Aucun résultat trouvé</h3>
+             <p className="font-bold text-gray-500 mb-6">Nous n'avons pas trouvé ce que vous cherchez.</p>
+             <button onClick={handleClearSearch} className="bg-gray-900 hover:bg-black text-white px-8 py-3 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-lg active:scale-95">
+               Voir tout le menu
+             </button>
+           </motion.div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-            <AnimatePresence mode="popLayout">
-              {filteredProducts.map((product) => (
-                <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }} key={product.id}>
+            <AnimatePresence mode="popLayout" initial={false}>
+              {filteredProducts.map((product: any) => (
+                <motion.div 
+                  layout 
+                  initial={{ opacity: 0, scale: 0.8 }} 
+                  animate={{ opacity: 1, scale: 1 }} 
+                  exit={{ opacity: 0, scale: 0.8 }} 
+                  transition={{ duration: 0.2, type: "spring", stiffness: 300, damping: 25 }} 
+                  key={product.id}
+                >
                   <ProductCard product={product} />
                 </motion.div>
               ))}
