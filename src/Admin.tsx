@@ -14,6 +14,7 @@ import { useFirestore } from './hooks/useFirestore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, Legend } from 'recharts';
 import { format, subDays, startOfDay, isAfter, startOfWeek, startOfMonth, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { hasPermission } from './permissions';
 
 // Activity Logger Utility
 const logActivity = async (action: string, details: string) => {
@@ -84,30 +85,40 @@ export default function AdminApp() {
     return <AdminLogin />;
   }
 
-  const roleText = {
+  const roleText: Record<string, string> = {
     'super_admin': 'Super Admin',
+    'SUPER_ADMIN': 'Super Admin',
     'admin': 'Administrateur',
+    'ADMIN': 'Administrateur',
+    'manager': 'Manager',
+    'MANAGER': 'Manager',
+    'staff': 'Staff',
+    'STAFF': 'Staff',
     'editor': 'Éditeur',
-    'viewer': 'Spectateur'
+    'EDITOR': 'Éditeur',
+    'driver': 'Livreur',
+    'DRIVER': 'Livreur',
+    'viewer': 'Spectateur',
+    'VIEWER': 'Spectateur'
   };
 
   const navItems = [
-    { name: 'Tableau de bord', path: '/admin', icon: <BarChartIcon className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
-    { name: 'Commandes', path: '/admin/orders', icon: <ShoppingBag className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
-    { name: 'Livreurs', path: '/admin/drivers', icon: <Bike className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
-    { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
-    { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
-    { name: 'Demandes Rappel', path: '/admin/callbacks', icon: <PhoneCall className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor', 'viewer'] },
-    { name: 'Promos & Bannières', path: '/admin/promos', icon: <Star className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Contenu', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Statuts Commandes', path: '/admin/statuses', icon: <Activity className="w-5 h-5"/>, allow: ['super_admin', 'admin', 'editor'] },
-    { name: 'Configuration', path: '/admin/config', icon: <Settings className="w-5 h-5"/>, allow: ['super_admin', 'admin'] },
-    { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, allow: ['super_admin'] },
-    { name: 'Logs d\'Activité', path: '/admin/logs', icon: <Lock className="w-5 h-5"/>, allow: ['super_admin'] },
-    { name: 'Sauvegardes', path: '/admin/backups', icon: <Download className="w-5 h-5"/>, allow: ['super_admin'] },
-  ].filter(item => item.allow.includes(role || 'viewer'));
+    { name: 'Tableau de bord', path: '/admin', icon: <BarChartIcon className="w-5 h-5"/>, permission: 'view_dashboard' },
+    { name: 'Commandes', path: '/admin/orders', icon: <ShoppingBag className="w-5 h-5"/>, permission: 'view_orders' },
+    { name: 'Livreurs', path: '/admin/drivers', icon: <Bike className="w-5 h-5"/>, permission: 'manage_drivers' },
+    { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, permission: 'manage_products' },
+    { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, permission: 'manage_categories' },
+    { name: 'Demandes Rappel', path: '/admin/callbacks', icon: <PhoneCall className="w-5 h-5"/>, permission: 'manage_callbacks' },
+    { name: 'Points de Vente', path: '/admin/pos', icon: <Plus className="w-5 h-5"/>, permission: 'manage_points_of_sale' },
+    { name: 'Avis Clients', path: '/admin/reviews', icon: <Plus className="w-5 h-5"/>, permission: 'view_dashboard' },
+    { name: 'Promos & Bannières', path: '/admin/promos', icon: <Star className="w-5 h-5"/>, permission: 'manage_promos' },
+    { name: 'Contenu', path: '/admin/cms', icon: <FileText className="w-5 h-5"/>, permission: 'manage_page_content' },
+    { name: 'Statuts Commandes', path: '/admin/statuses', icon: <Activity className="w-5 h-5"/>, permission: 'manage_config' },
+    { name: 'Configuration', path: '/admin/config', icon: <Settings className="w-5 h-5"/>, permission: 'manage_config' },
+    { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, permission: 'manage_users' },
+    { name: 'Logs d\'Activité', path: '/admin/logs', icon: <Lock className="w-5 h-5"/>, permission: 'manage_system' },
+    { name: 'Sauvegardes', path: '/admin/backups', icon: <Download className="w-5 h-5"/>, permission: 'manage_system' },
+  ].filter(item => hasPermission(role, item.permission as any));
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -175,19 +186,19 @@ export default function AdminApp() {
            <Routes>
              <Route path="/" element={<Dashboard role={role} />} />
              <Route path="/orders" element={<AdminOrders role={role} />} />
-             <Route path="/drivers" element={['super_admin', 'admin'].includes(role!) ? <AdminDrivers role={role} /> : <NoAccess />} />
-             <Route path="/products" element={<AdminProducts role={role} />} />
-             <Route path="/categories" element={<AdminCategories role={role} />} />
-             <Route path="/callbacks" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminCallbacks role={role} /> : <NoAccess />} />
-             <Route path="/pos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPOS role={role} /> : <NoAccess />} />
-             <Route path="/reviews" element={<AdminReviews role={role} />} />
-             <Route path="/promos" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminPromos role={role} /> : <NoAccess />} />
-             <Route path="/cms" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminCMS role={role} /> : <NoAccess />} />
-             <Route path="/statuses" element={['super_admin', 'admin', 'editor'].includes(role!) ? <AdminOrderStatuses role={role} /> : <NoAccess />} />
-             <Route path="/config" element={['super_admin', 'admin'].includes(role!) ? <AdminConfig role={role} /> : <NoAccess />} />
-             <Route path="/users" element={role === 'super_admin' ? <AdminUsers /> : <NoAccess />} />
-             <Route path="/logs" element={role === 'super_admin' ? <AdminLogs /> : <NoAccess />} />
-             <Route path="/backups" element={role === 'super_admin' ? <AdminBackups /> : <NoAccess />} />
+             <Route path="/drivers" element={hasPermission(role, 'manage_drivers') ? <AdminDrivers role={role} /> : <NoAccess />} />
+             <Route path="/products" element={hasPermission(role, 'manage_products') ? <AdminProducts role={role} /> : <NoAccess />} />
+             <Route path="/categories" element={hasPermission(role, 'manage_categories') ? <AdminCategories role={role} /> : <NoAccess />} />
+             <Route path="/callbacks" element={hasPermission(role, 'manage_callbacks') ? <AdminCallbacks role={role} /> : <NoAccess />} />
+             <Route path="/pos" element={hasPermission(role, 'manage_points_of_sale') ? <AdminPOS role={role} /> : <NoAccess />} />
+             <Route path="/reviews" element={hasPermission(role, 'view_dashboard') ? <AdminReviews role={role} /> : <NoAccess />} />
+             <Route path="/promos" element={hasPermission(role, 'manage_promos') ? <AdminPromos role={role} /> : <NoAccess />} />
+             <Route path="/cms" element={hasPermission(role, 'manage_page_content') ? <AdminCMS role={role} /> : <NoAccess />} />
+             <Route path="/statuses" element={hasPermission(role, 'manage_config') ? <AdminOrderStatuses role={role} /> : <NoAccess />} />
+             <Route path="/config" element={hasPermission(role, 'manage_config') ? <AdminConfig role={role} /> : <NoAccess />} />
+             <Route path="/users" element={hasPermission(role, 'manage_users') ? <AdminUsers /> : <NoAccess />} />
+             <Route path="/logs" element={hasPermission(role, 'manage_system') ? <AdminLogs /> : <NoAccess />} />
+             <Route path="/backups" element={hasPermission(role, 'manage_system') ? <AdminBackups /> : <NoAccess />} />
            </Routes>
         </main>
       </div>
@@ -210,7 +221,7 @@ function AdminProducts({ role }: { role: string | null }) {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [imageBase64, setImageBase64] = useState<string>('');
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_products');
 
   const handleEdit = (product: any) => {
     if (!canEdit) return;
@@ -399,7 +410,7 @@ function AdminCategories({ role }: { role: string | null }) {
   const { data: categories, loading, add, remove, update } = useFirestore('categories', 'orderId');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_categories');
   const [imageBase64, setImageBase64] = useState<string>('');
 
   const handleEdit = (category: any) => {
@@ -974,8 +985,8 @@ function AdminOrders({ role }: { role: string | null }) {
   const initialId = customStatuses[0]?.id || 'pending';
 
   const { data: orders, loading, update, remove } = useFirestore('orders', 'timestamp', undefined, 200);
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
-  const canDelete = ['super_admin', 'admin'].includes(role || '');
+  const canEdit = hasPermission(role, 'edit_orders');
+  const canDelete = hasPermission(role, 'delete_orders');
   const [filter, setFilter] = useState<'all' | 'active' | 'completed' | 'canceled'>('active');
 
   const activeOrders = orders.filter((o:any) => !terminalIds.includes(o.status));
@@ -1174,7 +1185,7 @@ function AdminPromos({ role }: { role: string | null }) {
   const { data: promos, loading, add, update, remove } = useFirestore('promos');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_promos');
 
   return (
     <div>
@@ -1247,7 +1258,7 @@ function AdminCMS({ role }: { role: string | null }) {
   const { data: pages, loading, add, update, remove } = useFirestore('page_content');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_page_content');
 
   return (
     <div>
@@ -1318,7 +1329,7 @@ function AdminOrderStatuses({ role }: { role: string | null }) {
   const { data: configs, loading, update, add } = useFirestore('config', 'brandName');
   const [showModal, setShowModal] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_config');
 
   const config = configs[0] || {};
   const statuses = config.customStatuses || [
@@ -1468,7 +1479,7 @@ function AdminOrderStatuses({ role }: { role: string | null }) {
 function AdminConfig({ role }: { role: string | null }) {
   const { data: configs, loading, update, add } = useFirestore('config', 'brandName');
   const [saving, setSaving] = useState(false);
-  const canEdit = ['super_admin', 'admin'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_config');
 
   // Default structure if missing
   const config = configs[0] || {
@@ -1668,12 +1679,14 @@ function AdminUsers() {
                   <td className="px-6 py-4">
                     <select 
                       className="bg-gray-100 border-none font-bold text-sm rounded-lg px-3 py-1 cursor-pointer focus:ring-2 focus:ring-[#FFC72C] outline-none"
-                      value={u.role || 'viewer'}
-                      onChange={(e) => { logActivity('MODIF_ROLE', `${u.email} -> ${e.target.value}`); update(u.id, { role: e.target.value }); }}
+                      value={u.role?.toLowerCase() || 'viewer'}
+                      onChange={(e) => { logActivity('MODIF_ROLE', `${u.email} -> ${e.target.value}`); update(u.id, { role: e.target.value.toLowerCase() }); }}
                       disabled={u.email === 'beidoufadimatou1998@gmail.com'}
                     >
                       <option value="viewer">Spectateur</option>
-                      <option value="editor">Éditeur</option>
+                      <option value="driver">Livreur</option>
+                      <option value="staff">Staff</option>
+                      <option value="manager">Manager</option>
                       <option value="admin">Administrateur</option>
                       <option value="super_admin">Super Admin</option>
                     </select>
@@ -1701,7 +1714,7 @@ function AdminPOS({ role }: { role: string | null }) {
   const { data: posList, loading, add, remove, update } = useFirestore('points_of_sale', 'name');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_points_of_sale');
 
   const [addressToGeocode, setAddressToGeocode] = useState(editingItem?.address || '');
   const [lat, setLat] = useState<number | string>(editingItem?.lat || '');
@@ -1861,7 +1874,7 @@ function AdminPOS({ role }: { role: string | null }) {
 
 function AdminReviews({ role }: { role: string | null }) {
   const { data: reviews, loading, update, remove } = useFirestore('reviews', 'createdAt');
-  const canEdit = ['super_admin', 'admin', 'editor'].includes(role || '');
+  const canEdit = hasPermission(role, 'manage_drivers');
   const [activeTab, setActiveTab] = useState<'client_to_driver' | 'driver_to_client' | 'platform'>('client_to_driver');
 
   return (
