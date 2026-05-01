@@ -65,11 +65,11 @@ export function PageLivreur() {
   }
 
   // Active delivery for this driver
-  const activeDelivery = allOrders?.find((o:any) => o.status === 'delivering' && o.driver?.id === driverIdentity?.id);
+  const activeDelivery = allOrders?.find((o:any) => ['delivering', 'arrived'].includes(o.status) && o.driver?.id === driverIdentity?.id);
   
-  // Pending ready orders
-  const readyOrders = allOrders?.filter((o:any) => o.status === 'ready' && !o.driver && o.orderMode === 'livraison')?.sort((a:any, b:any) => a.timestamp - b.timestamp);
-  const offeredOrder = (onlineStatus === 'available' && !activeDelivery && readyOrders && readyOrders?.length > 0) ? readyOrders[0] : null;
+  // Pending assigned orders for THIS specific driver
+  const assignedOrders = allOrders?.filter((o:any) => o.status === 'assigned' && o.driver?.id === driverIdentity?.id)?.sort((a:any, b:any) => a.timestamp - b.timestamp);
+  const offeredOrder = (onlineStatus === 'available' && !activeDelivery && assignedOrders && assignedOrders?.length > 0) ? assignedOrders[0] : null;
 
   const historyOrders = allOrders?.filter((o:any) => ['completed', 'canceled'].includes(o.status) && o.driver?.id === driverIdentity?.id)?.sort((a:any, b:any) => b.timestamp - a.timestamp);
 
@@ -81,9 +81,9 @@ export function PageLivreur() {
         // Also mark driver as busy
         await updateDriver(driverIdentity.id, { onlineStatus: 'busy' });
       }
-      if (newStatus === 'completed' && driverIdentity) {
-        // Mark driver as available again
-        await updateDriver(driverIdentity.id, { onlineStatus: 'available' });
+      if (newStatus === 'arrived' && driverIdentity) {
+        // Mark driver as available again (or stay busy?), stay busy maybe, but they can't take orders yet
+        // Wait, what if they become available when arrived? Probably not, they need to return or they are still assigned to this order
       }
       await update(docId, payload);
     } catch (e) {
@@ -95,12 +95,9 @@ export function PageLivreur() {
     await updateOrderStatus(orderId, 'delivering');
   };
 
-  const markArrived = async (orderId: string) => {
-    await updateOrderStatus(orderId, 'delivering', { driverArrived: true });
-  };
-
-  const markCompleted = async (order: any) => {
-    await updateOrderStatus(order.id, 'completed');
+  const markArrived = async (order: any) => {
+    await updateOrderStatus(order.id, 'arrived');
+    // Driver can rate client when marking arrived, or maybe just wait.
     setRatingOrder(order);
   };
 
@@ -238,14 +235,15 @@ export function PageLivreur() {
                    </div>
                  </div>
 
-                 {!activeDelivery.driverArrived ? (
-                   <button onClick={() => markArrived(activeDelivery.id)} className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase text-lg tracking-widest shadow-xl shadow-gray-900/20 active:scale-95 transition-transform">
+                 {activeDelivery.status === 'delivering' ? (
+                   <button onClick={() => markArrived(activeDelivery)} className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase text-lg tracking-widest shadow-xl shadow-gray-900/20 active:scale-95 transition-transform">
                      Je suis arrivé s/ place
                    </button>
                  ) : (
-                   <button onClick={() => markCompleted(activeDelivery)} className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-black uppercase text-lg tracking-widest shadow-xl shadow-green-500/20 active:scale-95 transition-transform flex items-center justify-center gap-2">
-                     <CheckCircle className="w-6 h-6" /> J'ai Livré !
-                   </button>
+                   <div className="w-full bg-green-100 text-green-800 py-5 rounded-2xl font-black uppercase text-lg tracking-widest text-center flex flex-col items-center justify-center gap-1">
+                     <span className="flex items-center gap-2"><CheckCircle className="w-6 h-6" /> Arrivé sur place</span>
+                     <span className="text-xs font-bold text-green-700 opacity-80 mt-1 lowercase first-letter:uppercase">En attente de validation par le gérant</span>
+                   </div>
                  )}
                </div>
              </div>

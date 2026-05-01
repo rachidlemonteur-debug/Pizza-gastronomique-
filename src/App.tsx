@@ -802,139 +802,8 @@ function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
 
 // --- NEW COMPONENT: CART DRAWER (STEP 2 - VALIDATION) ---
 function CartDrawer({ onClose }: { onClose: () => void }) {
-  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, setActiveOrder, whatsappLink, whatsappNumber, globalConfig, selectedPOS, isLoggedIn } = useCart();
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, globalConfig } = useCart();
   const navigate = useNavigate();
-  const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('emporter');
-  const [customerName, setCustomerName] = useState('');
-  const [address, setAddress] = useState('');
-  const [addressError, setAddressError] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [deliveryCoords, setDeliveryCoords] = useState<{lat: number, lng: number} | null>(null);
-  const [isLocating, setIsLocating] = useState(false);
-  const [checkoutError, setCheckoutError] = useState('');
-  
-  const { add: addOrder } = useFirestore('orders'); // Real-time order syncer
-
-  const handleGeolocate = () => {
-    if (!navigator.geolocation) {
-      setCheckoutError("La géolocalisation n'est pas supportée par votre navigateur.");
-      return;
-    }
-    setCheckoutError('');
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(async (position) => {
-       const lat = position.coords.latitude;
-       const lng = position.coords.longitude;
-       setDeliveryCoords({ lat, lng });
-       try {
-         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-         const data = await res.json();
-         if (data && data.display_name) {
-            setAddress(data.display_name);
-            setAddressError('');
-         }
-       } catch (err) {
-         console.error(err);
-         setCheckoutError("Position trouvée, mais impossible d'obtenir l'adresse texte.");
-       } finally {
-         setIsLocating(false);
-       }
-    }, (error) => {
-       setIsLocating(false);
-       setCheckoutError("Impossible d'obtenir votre position. Veuillez entrer l'adresse manuellement.");
-    });
-  };
-
-  // Step 3 - Transmission : Simulate server processing, then go to tracking.
-  const handleFinalCheckout = async () => {
-    setCheckoutError('');
-    if (cart.length === 0) return;
-    
-    // Validate Form Details
-    if (globalConfig?.isRestaurantOpen === false) {
-       setCheckoutError("Le restaurant est actuellement fermé, commande en ligne suspendue.");
-       return;
-    }
-    if (!customerName.trim()) {
-      setCheckoutError("Veuillez saisir votre nom pour valider la commande.");
-      return;
-    }
-    if (!selectedPOS) {
-      setCheckoutError("Veuillez sélectionner un point de vente avant de commander.");
-      return;
-    }
-    if (orderMode === 'livraison' && !address.trim() && !deliveryCoords) {
-      setAddressError("Veuillez saisir votre adresse de livraison.");
-      return;
-    } else {
-      setAddressError('');
-    }
-
-    setIsProcessing(true);
-    
-    const generatedId = 'CMD-' + Math.floor(1000 + Math.random() * 9000);
-    
-    // Initial status
-    let initialStatus = 'pending';
-    if (globalConfig?.customStatuses && globalConfig.customStatuses.length > 0) {
-       initialStatus = globalConfig.customStatuses[0].id;
-    }
-
-    const newOrderData: any = {
-       id: generatedId,
-       orderNumber: generatedId,
-       status: initialStatus,
-       total: getCartTotal() + (orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0),
-       items: [...cart],
-       orderMode: orderMode,
-       posId: selectedPOS?.id?.toString() || 'unknown',
-       posName: selectedPOS?.name || 'Restaurant inconnu',
-       address: address || 'Antananarivo, Centre',
-       customerName: customerName || 'Client',
-       etaMinutes: 25,
-       timestamp: Date.now()
-    };
-    if (deliveryCoords) newOrderData.deliveryCoords = deliveryCoords;
-    if (isLoggedIn && auth.currentUser) newOrderData.userId = auth.currentUser.uid;
-    
-    // Construct WhatsApp message
-    let message = `*🔴 NOUVELLE COMMANDE LA GASTRONOMIE*\n\n`;
-    message += `*N° Commande :* ${generatedId}\n`;
-    message += `*Mode :* ${orderMode === 'livraison' ? '🛵 Livraison' : '🏃‍♂️ À emporter'}\n`;
-    if (customerName) message += `*Nom :* ${customerName}\n`;
-    if (orderMode === 'livraison' && address) message += `*Adresse :* ${address}\n`;
-    if (orderMode === 'emporter' && selectedPOS) message += `*Point de vente :* ${selectedPOS.name}\n`;
-    
-    message += `\n*--- DÉTAIL DE LA COMMANDE ---*\n`;
-    cart.forEach(item => {
-      message += `🍔 ${item.quantity}x ${item.product.name} (${formatPriceC(item.product.price * item.quantity)})\n`;
-      if (item.instructions) message += `   ↳ _Note: ${item.instructions}_\n`;
-    });
-    
-    message += `\n*--- RÉCAPITULATIF ---*\n`;
-    message += `*Total à payer :* *${formatPriceC(newOrderData.total)}*\n\n`;
-    message += `Merci de valider ma commande ! 👍`;
-    
-    const baseUrl = `https://wa.me/${whatsappNumber.replace(/\s+/g, '')}`;
-    window.open(`${baseUrl}?text=${encodeURIComponent(message)}`, '_blank');
-    
-    // Add to Firestore
-    try {
-      const sanitizedOrder = JSON.parse(JSON.stringify(newOrderData));
-      const orderId = await addOrder(sanitizedOrder);
-      const finalOrder = { ...newOrderData, id: orderId };
-      setActiveOrder(finalOrder);
-      
-      clearCart();
-      setIsProcessing(false);
-      onClose();
-      navigate('/tracking');
-    } catch (e) {
-      console.error("Firebase err:", e);
-      setIsProcessing(false);
-      setCheckoutError("Erreur lors de l'envoi de la commande à nos serveurs.");
-    }
-  };
 
   return (
     <motion.div 
@@ -1012,68 +881,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                  </div>
               </div>
 
-              {/* Order Settings Form */}
-              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mt-6">
-                 <h3 className="font-black uppercase text-gray-900 mb-4 text-sm tracking-widest">Options de la commande</h3>
-                 
-                 <div className="grid grid-cols-2 gap-2 mb-4 bg-gray-100 p-1 rounded-xl">
-                   <button 
-                     onClick={() => setOrderMode('emporter')}
-                     className={`py-2 rounded-lg font-black text-xs sm:text-sm uppercase tracking-wide transition-all ${orderMode === 'emporter' ? 'bg-white shadow-sm text-[#DA291C]' : 'text-gray-500'}`}
-                   >
-                     À emporter
-                   </button>
-                   <button 
-                     onClick={() => setOrderMode('livraison')}
-                     className={`py-2 rounded-lg font-black text-xs sm:text-sm uppercase tracking-wide transition-all ${orderMode === 'livraison' ? 'bg-white shadow-sm text-[#DA291C]' : 'text-gray-500'}`}
-                   >
-                     Livraison
-                   </button>
-                 </div>
-                 
-                 {checkoutError && (
-                    <div className="mb-4 bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl text-sm font-bold flex items-center gap-2">
-                       <ShieldAlert className="w-5 h-5 shrink-0" />
-                       <p>{checkoutError}</p>
-                    </div>
-                 )}
-
-                 <div className="space-y-3">
-                    <input 
-                      type="text" 
-                      placeholder="Votre Prénom*" 
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl text-sm font-bold placeholder-gray-400 outline-none focus:border-[#FFC72C] focus:bg-white transition-colors"
-                    />
-                    {orderMode === 'livraison' && (
-                      <div className="space-y-3">
-                        <button 
-                           onClick={handleGeolocate} 
-                           type="button"
-                           disabled={isLocating}
-                           className="w-full flex items-center justify-center gap-2 bg-[#DA291C]/10 text-[#DA291C] hover:bg-[#DA291C]/20 border border-[#DA291C]/20 p-3 rounded-xl text-sm font-black uppercase tracking-widest transition-all"
-                        >
-                           <MapPin className="w-4 h-4" />
-                           {isLocating ? 'Recherche en cours...' : 'Utiliser ma position actuelle'}
-                        </button>
-                        <div className="flex items-center gap-4">
-                           <hr className="flex-1 border-gray-200" />
-                           <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">OU SAISIR</span>
-                           <hr className="flex-1 border-gray-200" />
-                        </div>
-                        <input 
-                          type="text" 
-                          placeholder="Adresse Complète de Livraison*" 
-                          value={address}
-                          onChange={(e) => { setAddress(e.target.value); setAddressError(''); }}
-                          className={`w-full bg-gray-50 border ${addressError ? 'border-red-500 bg-red-50' : 'border-gray-200'} p-3 rounded-xl text-sm font-bold placeholder-gray-400 outline-none focus:border-[#FFC72C] focus:bg-white transition-colors`}
-                        />
-                        {addressError && <p className="text-red-500 font-bold text-xs mt-1 px-1">{addressError}</p>}
-                      </div>
-                    )}
-                 </div>
-              </div>
+              {/* Order Settings Form removed to avoid double form issue. It is handled in Checkout.tsx */}
 
             </div>
           )}
@@ -1092,7 +900,7 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
                  onClose();
                  navigate('/checkout');
                }}
-               disabled={globalConfig?.isRestaurantOpen === false || isProcessing}
+               disabled={globalConfig?.isRestaurantOpen === false}
                className={`w-full py-4 rounded-[1.25rem] font-black text-lg uppercase flex items-center justify-center gap-3 transition-all ${globalConfig?.isRestaurantOpen === false ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-[#DA291C] text-white hover:bg-red-700 shadow-[0_10px_20px_rgba(218,41,28,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-[#99140d] active:border-b-0 active:translate-y-[5px]'}`}
              >
                 {globalConfig?.isRestaurantOpen === false ? (
@@ -1892,15 +1700,27 @@ function PageTracking() {
                <p className="text-gray-500 font-bold flex items-center gap-2"><MapPin className="w-4 h-4" /> {activeOrder.address}</p>
             </div>
             
-            <div className="flex gap-6 w-full md:w-auto bg-gray-50 p-4 rounded-xl border border-gray-100">
+            <div className="flex gap-4 w-full md:w-auto bg-gray-50 p-4 rounded-xl border border-gray-100 flex-wrap">
                <div>
                   <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Montant payé</span>
                   <span className="text-xl font-black text-gray-900">{formatPriceC(activeOrder.total)}</span>
                </div>
                {activeOrder.deliveryTime && (
-                 <div className="border-l border-gray-200 pl-6">
+                 <div className="border-l border-gray-200 pl-4">
                     <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Heure de passage</span>
-                    <span className="text-xl font-black text-[#25D366] flex items-center gap-1"><Timer className="w-5 h-5"/> {activeOrder.deliveryTime === 'asap' ? 'Rapide (~30m)' : activeOrder.deliveryTime}</span>
+                    <span className="text-xl font-black text-[#25D366] flex items-center gap-1"><Timer className="w-5 h-5"/> {activeOrder.deliveryTime === 'asap' ? '~30m' : activeOrder.deliveryTime}</span>
+                 </div>
+               )}
+               {activeOrder.posName && (
+                 <div className="border-l border-gray-200 pl-4">
+                    <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Point de vente</span>
+                    <span className="text-sm font-black text-gray-900 flex items-center gap-1">{activeOrder.posName}</span>
+                 </div>
+               )}
+               {activeOrder.driver?.name && (
+                 <div className="border-l border-gray-200 pl-4">
+                    <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Livreur</span>
+                    <span className="text-sm font-black text-[#DA291C] flex items-center gap-1"><Bike className="w-4 h-4"/> {activeOrder.driver.name}</span>
                  </div>
                )}
             </div>
@@ -1912,7 +1732,9 @@ function PageTracking() {
                   { id: 'pending', label: 'Nouvelle', customerLabel: 'Commande reçue, en attente...', color: 'bg-red-100 text-red-700', isTerminal: false },
                   { id: 'preparing', label: 'En cuisine', customerLabel: 'Vos plats sont en cours de préparation en cuisine ! 👨‍🍳', color: 'bg-orange-100 text-orange-700', isTerminal: false },
                   { id: 'ready', label: 'Prête', customerLabel: 'Commande prête !', color: 'bg-yellow-100 text-yellow-700', isTerminal: false },
+                  { id: 'assigned', label: 'Assignée', customerLabel: 'Nous avons trouvé un livreur !', color: 'bg-indigo-100 text-indigo-700', isTerminal: false },
                   { id: 'delivering', label: 'En livraison', customerLabel: 'Le livreur est en route vers chez vous ! 🛵', color: 'bg-blue-100 text-blue-700', isTerminal: false },
+                  { id: 'arrived', label: 'Arrivé', customerLabel: 'Le livreur est devant chez vous !', color: 'bg-purple-100 text-purple-700', isTerminal: false },
                   { id: 'completed', label: 'Terminée', customerLabel: 'Commande terminée !', color: 'bg-green-100 text-green-700', isTerminal: true },
                   { id: 'canceled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCanceled: true }
                 ];

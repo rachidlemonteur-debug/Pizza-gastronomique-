@@ -111,12 +111,12 @@ service cloud.firestore {
         (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation'])) ||
         // Client rating the order
         (existing().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['clientHasRated'])) ||
-        // Livreur taking charge from ready
-        (incoming().status == 'delivering' && existing().status == 'ready' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driver'])) ||
+        // Livreur taking charge from 'assigned' (driver was already set by manager)
+        (incoming().status == 'delivering' && existing().status == 'assigned' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
         // Livreur updating location
-        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation'])) ||
-        // Livreur completing
-        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasAll(['driverLocation']) && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'status'])) ||
+        // Livreur marking as arrived
+        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().status == 'arrived' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
       );
       
       allow delete: if isAdmin();

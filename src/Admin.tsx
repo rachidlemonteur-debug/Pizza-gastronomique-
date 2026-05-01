@@ -1114,11 +1114,11 @@ function AdminOrders({ role }: { role: string | null }) {
                         onChange={(e) => {
                            const newDriverId = e.target.value;
                            if (!newDriverId) {
-                              update(order.id, { driver: null });
+                              update(order.id, { driver: null, status: 'ready' });
                            } else {
                               const selected = drivers?.find((d:any) => d.id === newDriverId);
                               if (selected) {
-                                 update(order.id, { driver: { id: selected.id, name: selected.name, phone: selected.phone } });
+                                 update(order.id, { driver: { id: selected.id, name: selected.name, phone: selected.phone }, status: 'assigned' });
                               }
                            }
                         }}
@@ -1136,7 +1136,7 @@ function AdminOrders({ role }: { role: string | null }) {
                 <span className="font-black text-2xl text-gray-900 mb-4">{order.total.toLocaleString()} Ar</span>
                 
                 <div className="flex gap-2 w-full lg:w-auto">
-                   {(canEdit && !terminalIds.includes(order.status) && order.status !== canceledIds[0]) && (
+                   {(canEdit && !terminalIds.includes(order.status) && order.status !== canceledIds[0] && !(order.orderMode === 'livraison' && order.status === 'ready')) && (
                      <button 
                         onClick={() => advanceOrderState(order)} 
                         className="flex-1 lg:flex-none px-4 py-2.5 bg-gray-900 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-gray-800 active:scale-95 transition-all shadow-md"
@@ -1325,7 +1325,9 @@ function AdminOrderStatuses({ role }: { role: string | null }) {
     { id: 'pending', label: 'Nouvelle', customerLabel: 'Commande reçue, en attente...', color: 'bg-red-100 text-red-700', isTerminal: false, isCanceled: false },
     { id: 'preparing', label: 'En cuisine', customerLabel: 'Vos plats sont en cours de préparation en cuisine !', color: 'bg-orange-100 text-orange-700', isTerminal: false, isCanceled: false },
     { id: 'ready', label: 'Prête', customerLabel: 'Commande prête !', color: 'bg-yellow-100 text-yellow-700', isTerminal: false, isCanceled: false },
+    { id: 'assigned', label: 'Assignée', customerLabel: 'Nous avons identifié le meilleur livreur pour vous !', color: 'bg-indigo-100 text-indigo-700', isTerminal: false, isCanceled: false },
     { id: 'delivering', label: 'En livraison', customerLabel: 'Le livreur est en route vers chez vous !', color: 'bg-blue-100 text-blue-700', isTerminal: false, isCanceled: false },
+    { id: 'arrived', label: 'Arrivé s/ place', customerLabel: 'Le livreur est devant chez vous ! 🛵', color: 'bg-purple-100 text-purple-700', isTerminal: false, isCanceled: false },
     { id: 'completed', label: 'Terminée', customerLabel: 'Commande terminée !', color: 'bg-green-100 text-green-700', isTerminal: true, isCanceled: false },
     { id: 'canceled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCanceled: true }
   ];
