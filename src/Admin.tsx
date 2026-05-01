@@ -1035,11 +1035,15 @@ function AdminOrders({ role }: { role: string | null }) {
 
     if (currentIndex >= 0 && currentIndex < customStatuses.length - 1) {
        let nextIndex = currentIndex + 1;
-       // Skip delivering if mode is emporter
-       if (order.orderMode === 'emporter' && customStatuses[nextIndex]?.id === 'delivering') {
-           nextIndex++;
+       
+       // Skip delivery-specific stages if mode is emporter
+       if (order.orderMode === 'emporter') {
+           const deliveryOnlyIds = ['assigned', 'delivering', 'arrived'];
+           while (nextIndex < customStatuses.length && deliveryOnlyIds.includes(customStatuses[nextIndex]?.id)) {
+               nextIndex++;
+           }
        }
-       // If next is valid and not already terminal (unless they specifically want to go back? usually we don't go back here, and advance doesn't bypass terminal unless it's part of the flow)
+       
        // Let's just blindly go to nextIndex as long as it exists and is not canceled
        while (nextIndex < customStatuses.length && customStatuses[nextIndex].isCanceled) {
            nextIndex++;

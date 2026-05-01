@@ -12,9 +12,9 @@ export function PageCheckout() {
   const navigate = useNavigate();
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [orderMode, setOrderMode] = useState<'livraison' | 'emporter'>('livraison');
-  const [customerName, setCustomerName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [address, setAddress] = useState('');
+  const [customerName, setCustomerName] = useState(() => localStorage.getItem('gastro_checkout_name') || '');
+  const [phoneNumber, setPhoneNumber] = useState(() => localStorage.getItem('gastro_checkout_phone') || '');
+  const [address, setAddress] = useState(() => localStorage.getItem('gastro_checkout_address') || '');
   const [deliveryTime, setDeliveryTime] = useState('asap');
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -48,6 +48,11 @@ export function PageCheckout() {
 
     setIsProcessing(true);
     setError('');
+    
+    // Save to localStorage for future use
+    localStorage.setItem('gastro_checkout_name', customerName);
+    localStorage.setItem('gastro_checkout_phone', phoneNumber);
+    localStorage.setItem('gastro_checkout_address', address);
     
     // Simulate payment API call
     setTimeout(async () => {

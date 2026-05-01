@@ -98,7 +98,7 @@ service cloud.firestore {
              (!data.keys().hasAny(['status']) || (data.status is string)) &&
              (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
              (!data.keys().hasAny(['driverLocation']) || (data.driverLocation is map)) &&
-             (!data.keys().hasAny(['driver']) || (data.driver is map)) &&
+             (!data.keys().hasAny(['driver']) || data.driver == null || (data.driver is map)) &&
              (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100)) &&
              (!data.keys().hasAny(['clientHasRated']) || (data.clientHasRated is bool));
     }
@@ -109,9 +109,8 @@ service cloud.firestore {
       allow create: if isValidOrder(incoming()) && incoming().keys().hasAll(['total', 'status']); // Relaxed 'customerName' as it might be anonymous
       
       // Editor can update, mostly status
-      allow update: if isValidOrder(incoming()) && (
-        isAdmin() || 
-        (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation'])) ||
+      allow update: if isAdmin() || (isValidOrder(incoming()) && (
+        (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation', 'driver'])) ||
         // Client rating the order
         (existing().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['clientHasRated'])) ||
         // Livreur taking charge from 'assigned' (driver was already set by manager)
@@ -120,7 +119,7 @@ service cloud.firestore {
         (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasAll(['driverLocation']) && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'status'])) ||
         // Livreur marking as arrived
         (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().status == 'arrived' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
-      );
+      ));
       
       allow delete: if isAdmin();
     }
