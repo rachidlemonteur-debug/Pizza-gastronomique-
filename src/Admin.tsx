@@ -744,6 +744,7 @@ function Dashboard({ role }: { role: string | null }) {
   const { data: products, loading: productsLoading } = useFirestore('products');
   const { data: categories, loading: categoriesLoading } = useFirestore('categories');
   const { data: drivers } = useFirestore('drivers');
+  const { data: reviews } = useFirestore('reviews');
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('week');
   
   if (ordersLoading || productsLoading || categoriesLoading) return <div className="animate-pulse flex gap-4"><div className="w-full h-16 bg-gray-200 rounded-xl"></div></div>;
@@ -806,9 +807,17 @@ function Dashboard({ role }: { role: string | null }) {
          driverPerformance[o.driver.id] = { deliveries: 0, totalTime: 0, ratingSum: 0, ratingCount: 0 };
        }
        driverPerformance[o.driver.id].deliveries++;
-       // Mocking time/rating logic if missing, just counting deliveries for now
      }
   });
+
+  if (reviews) {
+    reviews.forEach((r: any) => {
+      if (r.type === 'client_to_driver' && r.driverId && driverPerformance[r.driverId]) {
+        driverPerformance[r.driverId].ratingSum += (r.rating || 0);
+        driverPerformance[r.driverId].ratingCount++;
+      }
+    });
+  }
 
   const chartDataProducts = Object.entries(productCount)
      .sort((a, b) => b[1] - a[1]) // Sort descending
@@ -911,7 +920,14 @@ function Dashboard({ role }: { role: string | null }) {
                         </div>
                         <div>
                           <div className="font-black text-gray-900 sm:text-lg">{dName}</div>
-                          <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">{stats.deliveries} courses livrées</div>
+                          <div className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                             <span>{stats.deliveries} courses livrées</span>
+                             {stats.ratingCount > 0 && (
+                               <span className="flex items-center text-[#FFC72C]">
+                                  | {((stats.ratingSum / stats.ratingCount) || 0).toFixed(1)} <Star className="w-3 h-3 ml-0.5 fill-current"/> ({stats.ratingCount})
+                               </span>
+                             )}
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">

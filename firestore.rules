@@ -89,14 +89,15 @@ service cloud.firestore {
 
     // -- ORDERS --
     function isValidOrder(data) {
-      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation', 'paymentMethod', 'paymentPhone', 'deliveryTime', 'driver']) &&
+      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation', 'paymentMethod', 'paymentPhone', 'deliveryTime', 'driver', 'clientHasRated']) &&
              (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
              (!data.keys().hasAny(['total']) || (data.total is number)) &&
              (!data.keys().hasAny(['status']) || (data.status is string)) &&
              (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
              (!data.keys().hasAny(['driverLocation']) || (data.driverLocation is map)) &&
              (!data.keys().hasAny(['driver']) || (data.driver is map)) &&
-             (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100));
+             (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100)) &&
+             (!data.keys().hasAny(['clientHasRated']) || (data.clientHasRated is bool));
     }
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && (isViewer() || true); 
@@ -108,6 +109,8 @@ service cloud.firestore {
       allow update: if isValidOrder(incoming()) && (
         isAdmin() || 
         (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation'])) ||
+        // Client rating the order
+        (existing().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['clientHasRated'])) ||
         // Livreur taking charge from ready
         (incoming().status == 'delivering' && existing().status == 'ready' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driver'])) ||
         // Livreur updating location
@@ -163,6 +166,33 @@ service cloud.firestore {
       allow list: if isSuperAdmin();
       allow create: if isSignedIn(); // Log any admin action
       allow update, delete: if false; // Logs are immutable
+    }
+
+    // -- REVIEWS --
+    match /reviews/{reviewId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if true; // anyone can create a review (client or driver)
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // -- DRIVERS --
+    match /drivers/{driverId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAdmin();
+      allow update: if true; // driver needs to mark themselves as online/offline
+      allow delete: if isAdmin();
+    }
+
+    // -- CALLBACKS --
+    match /callbacks/{callbackId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if true; // anyone can request a callback
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
   }
 }
