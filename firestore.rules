@@ -94,8 +94,11 @@ service cloud.firestore {
     function isValidOrder(data) {
       return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation', 'paymentMethod', 'paymentPhone', 'deliveryTime', 'driver', 'clientHasRated']) &&
              (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
+             (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 300)) &&
+             (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 30)) &&
+             (!data.keys().hasAny(['paymentPhone']) || (data.paymentPhone is string && data.paymentPhone.size() <= 30)) &&
              (!data.keys().hasAny(['total']) || (data.total is number)) &&
-             (!data.keys().hasAny(['status']) || (data.status is string)) &&
+             (!data.keys().hasAny(['status']) || (data.status is string && data.status.size() <= 30)) &&
              (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
              (!data.keys().hasAny(['driverLocation']) || (data.driverLocation is map)) &&
              (!data.keys().hasAny(['driver']) || data.driver == null || (data.driver is map)) &&
@@ -127,7 +130,10 @@ service cloud.firestore {
     // -- POINTS OF SALE --
     function isValidPOS(data) {
       return data.keys().hasOnly(['name', 'address', 'lat', 'lng', 'phone', 'hours', 'priority', 'isOpen', 'district']) &&
-             data.name is string && data.lat is number && data.lng is number;
+             data.name is string && data.name.size() <= 100 && 
+             data.lat is number && data.lng is number &&
+             (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 300)) &&
+             (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 30));
     }
     match /points_of_sale/{posId} {
       allow get: if isValidId(posId);

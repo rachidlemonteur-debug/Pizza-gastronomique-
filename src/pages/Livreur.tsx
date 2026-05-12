@@ -77,13 +77,11 @@ export function PageLivreur() {
     try {
       const payload: any = { status: newStatus, ...additionalProps };
       if (newStatus === 'delivering' && driverIdentity) {
-        payload.driver = driverIdentity;
         // Also mark driver as busy
         await updateDriver(driverIdentity.id, { onlineStatus: 'busy' });
       }
       if (newStatus === 'arrived' && driverIdentity) {
-        // Mark driver as available again (or stay busy?), stay busy maybe, but they can't take orders yet
-        // Wait, what if they become available when arrived? Probably not, they need to return or they are still assigned to this order
+        // ...
       }
       await update(docId, payload);
     } catch (e) {
