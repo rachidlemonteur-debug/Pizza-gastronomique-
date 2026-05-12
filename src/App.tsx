@@ -119,17 +119,20 @@ const COUNTRIES = {
 };
 
 type ProductInfo = typeof PRODUCTS[0];
-type CartItem = { product: ProductInfo, quantity: number, instructions?: string };
+type CartItem = { id: string; product: ProductInfo; quantity: number; instructions?: string; selectedAddons?: string[]; basePrice?: number; };
 
 // --- CONTEXT ---
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: ProductInfo, quantity: number, instructions?: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
+  addToCart: (product: ProductInfo, quantity: number, instructions?: string, selectedAddons?: string[], basePrice?: number) => void;
+  updateQuantity: (cartItemId: string, quantity: number) => void;
+  removeFromCart: (cartItemId: string) => void;
+  updateCartItemInfo: (cartItemId: string, updatedProduct: ProductInfo, quantity: number, instructions: string, selectedAddons: string[], basePrice: number) => void;
   getCartCount: () => number;
   getCartTotal: () => number;
   selectedProduct: ProductInfo | null;
+  editingCartItem: CartItem | null;
+  setEditingCartItem: (i: CartItem | null) => void;
   setSelectedProduct: (p: ProductInfo | null) => void;
   isCartOpen: boolean;
   setIsCartOpen: (b: boolean) => void;
@@ -292,29 +295,51 @@ export default function App() {
     return () => unsubscribe();
   }, [activeOrder?.id]);
 
-  const addToCart = (product: ProductInfo, quantity: number, instructions: string = '') => {
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
+
+  const addToCart = (product: ProductInfo, quantity: number, instructions: string = '', selectedAddons: string[] = [], basePrice: number = product.price) => {
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      // Find exact same configuration (same product ID and exactly same addons)
+      const existing = prev.find(item => {
+        if (item.product.id !== product.id) return false;
+        const currentAddons = item.selectedAddons || [];
+        if (currentAddons.length !== selectedAddons.length) return false;
+        return selectedAddons.every(id => currentAddons.includes(id));
+      });
+
       if (existing) {
-        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + quantity, instructions: instructions || item.instructions } : item);
+        return prev.map(item => item.id === existing.id ? { ...item, quantity: item.quantity + quantity, instructions: instructions || item.instructions } : item);
       }
-      return [...prev, { product, quantity, instructions }];
+      
+      const newItemId = Math.random().toString(36).substring(7);
+      return [...prev, { id: newItemId, product, quantity, instructions, selectedAddons, basePrice }];
     });
     setSelectedProduct(null);
     setLastAdded(`${quantity}x ${product.name}`);
     setTimeout(() => setLastAdded(null), 3000);
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = (cartItemId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(cartItemId);
       return;
     }
-    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
+    setCart(prev => prev.map(item => item.id === cartItemId ? { ...item, quantity } : item));
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
+  const removeFromCart = (cartItemId: string) => {
+    setCart(prev => prev.filter(item => item.id !== cartItemId));
+  };
+
+  const updateCartItemInfo = (cartItemId: string, updatedProduct: ProductInfo, quantity: number, instructions: string, selectedAddons: string[], basePrice: number) => {
+    setCart(prev => prev.map(item => item.id === cartItemId ? {
+      ...item,
+      product: updatedProduct,
+      quantity,
+      instructions,
+      selectedAddons,
+      basePrice
+    } : item));
   };
 
   const clearCart = () => {
@@ -336,7 +361,7 @@ export default function App() {
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=Bonjour,%20je%20souhaite%20commander.`;
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder, globalProducts, globalCategories, globalConfig, globalPOS, selectedPOS, setSelectedPOS, userCoords }}>
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, updateCartItemInfo, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, editingCartItem, setEditingCartItem, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder, globalProducts, globalCategories, globalConfig, globalPOS, selectedPOS, setSelectedPOS, userCoords }}>
       <Router>
         <AppWithRouter />
       </Router>
@@ -351,7 +376,8 @@ function Layout({ children }: { children: React.ReactNode }) {
     country, setCountry, formatPriceC, whatsappLink, whatsappNumber,
     cart, activeOrder, globalConfig, globalPOS, 
     selectedPOS, setSelectedPOS, userCoords,
-    selectedProduct, setSelectedProduct, lastAdded
+    selectedProduct, setSelectedProduct, lastAdded,
+    editingCartItem, setEditingCartItem
   } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
@@ -702,6 +728,13 @@ function Layout({ children }: { children: React.ReactNode }) {
             onClose={() => setSelectedProduct(null)} 
           />
         )}
+        {editingCartItem && (
+          <ProductDetailModal 
+            product={editingCartItem.product} 
+            editCartItem={editingCartItem}
+            onClose={() => setEditingCartItem(null)} 
+          />
+        )}
       </AnimatePresence>
 
       {/* TOAST NOTIFICATION */}
@@ -802,7 +835,7 @@ function POSSelectionModal({ isOpen, onClose }: { isOpen: boolean, onClose: () =
 
 // --- NEW COMPONENT: CART DRAWER (STEP 2 - VALIDATION) ---
 function CartDrawer({ onClose }: { onClose: () => void }) {
-  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, globalConfig } = useCart();
+  const { cart, getCartTotal, updateQuantity, removeFromCart, clearCart, formatPriceC, addToCart, globalConfig, setEditingCartItem } = useCart();
   const navigate = useNavigate();
 
   return (
@@ -840,24 +873,39 @@ function CartDrawer({ onClose }: { onClose: () => void }) {
               {/* Items */}
               <div className="space-y-4">
                 {cart.map((item) => (
-                  <div key={item.product.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex gap-4">
-                    <img src={item.product.image} className="w-20 h-20 bg-gray-50 rounded-xl object-contain p-1" alt={item.product.name} />
-                    <div className="flex-1 flex flex-col justify-between">
-                       <div className="flex justify-between items-start">
-                         <div>
-                           <h4 className="font-black text-gray-900 leading-tight uppercase text-sm">{item.product.name}</h4>
-                           <p className="text-[#DA291C] font-black text-sm mt-1">{formatPriceC(item.product.price)}</p>
+                  <div key={item.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
+                    <div className="flex gap-4">
+                      <img src={item.product.image} className="w-20 h-20 bg-gray-50 rounded-xl object-contain p-1" alt={item.product.name} />
+                      <div className="flex-1 flex flex-col justify-between">
+                         <div className="flex justify-between items-start">
+                           <div>
+                             <h4 className="font-black text-gray-900 leading-tight uppercase text-sm">{item.product.name}</h4>
+                             <p className="text-[#DA291C] font-black text-sm mt-1">{formatPriceC(item.product.price)}</p>
+                           </div>
+                           <button onClick={() => removeFromCart(item.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1"><Trash2 className="w-5 h-5"/></button>
                          </div>
-                         <button onClick={() => removeFromCart(item.product.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1"><Trash2 className="w-5 h-5"/></button>
-                       </div>
-                       <div className="flex justify-between items-end mt-2">
-                          <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
-                            <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="p-1 hover:text-[#DA291C]"><Minus className="w-4 h-4 stroke-[3]"/></button>
-                            <span className="font-black w-4 text-center text-sm">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="p-1 hover:text-[#DA291C]"><Plus className="w-4 h-4 stroke-[3]"/></button>
-                          </div>
-                          <span className="font-black text-gray-900">{formatPriceC(item.product.price * item.quantity)}</span>
-                       </div>
+                         <div className="flex justify-between items-end mt-2">
+                            <div className="flex items-center gap-3 bg-gray-100 rounded-lg p-1">
+                              <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="p-1 hover:text-[#DA291C]"><Minus className="w-4 h-4 stroke-[3]"/></button>
+                              <span className="font-black w-4 text-center text-sm">{item.quantity}</span>
+                              <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-1 hover:text-[#DA291C]"><Plus className="w-4 h-4 stroke-[3]"/></button>
+                            </div>
+                            <span className="font-black text-gray-900">{formatPriceC(item.product.price * item.quantity)}</span>
+                         </div>
+                      </div>
+                    </div>
+                    {/* Addons and Edit button */}
+                    <div className="flex justify-between items-center bg-gray-50 rounded-lg px-3 py-2 mt-1">
+                       <span className="text-xs text-gray-500 truncate max-w-[200px]" title={item.instructions}>
+                         {item.instructions || 'Sans suppléments / Note'}
+                       </span>
+                       <button onClick={() => { 
+                         // Open ProductDetailModal with this item
+                         setEditingCartItem(item);
+                         onClose();
+                       }} className="text-xs font-bold text-gray-600 hover:text-[#DA291C] underline flex items-center gap-1">
+                         Modifier
+                       </button>
                     </div>
                   </div>
                 ))}
@@ -1550,11 +1598,24 @@ const ProductCard: React.FC<{ product: ProductInfo }> = ({ product }) => {
 }
 
 // --- PRODUCT MODAL ---
-const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }> = ({ product, onClose }) => {
-  const { addToCart, formatPriceC } = useCart();
-  const [quantity, setQuantity] = useState(1);
-  const [instructions, setInstructions] = useState('');
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+const ProductDetailModal: React.FC<{ product: ProductInfo, editCartItem?: CartItem, onClose: () => void }> = ({ product, editCartItem, onClose }) => {
+  const { addToCart, updateCartItemInfo, formatPriceC } = useCart();
+  const [quantity, setQuantity] = useState(editCartItem?.quantity || 1);
+  // Remove the 'Suppléments: A, B. ' prefix from instructions initially
+  const [instructions, setInstructions] = useState(() => {
+    if (!editCartItem?.instructions) return '';
+    let inst = editCartItem.instructions;
+    if (inst.startsWith('Suppléments: ')) {
+       const dotIndex = inst.indexOf('. ');
+       if (dotIndex !== -1) {
+         inst = inst.substring(dotIndex + 2);
+       } else {
+         inst = '';
+       }
+    }
+    return inst;
+  });
+  const [selectedAddons, setSelectedAddons] = useState<string[]>(editCartItem?.selectedAddons || []);
   useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = 'unset'; }; }, []);
 
   const addons = [
@@ -1567,13 +1628,18 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
     let finalInstructions = instructions;
     if (selectedAddons.length > 0) {
       const addonNames = selectedAddons.map(id => addons.find(a => a.id === id)?.name).join(', ');
-      finalInstructions = `Suppléments: ${addonNames}. ${instructions}`;
+      finalInstructions = `Suppléments: ${addonNames}.${instructions ? ' ' + instructions : ''}`;
     }
     
     const addonsTotal = selectedAddons.reduce((sum, id) => sum + (addons.find(a => a.id === id)?.price || 0), 0);
-    const finalProduct = { ...product, price: product.price + addonsTotal };
+    const basePrice = editCartItem?.basePrice !== undefined ? editCartItem.basePrice : product.price;
+    const finalProduct = { ...product, price: basePrice + addonsTotal };
     
-    addToCart(finalProduct, quantity, finalInstructions);
+    if (editCartItem) {
+      updateCartItemInfo(editCartItem.id, finalProduct, quantity, finalInstructions, selectedAddons, basePrice);
+    } else {
+      addToCart(finalProduct, quantity, finalInstructions, selectedAddons, basePrice);
+    }
     onClose();
   };
 
@@ -1581,8 +1647,9 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
     setSelectedAddons(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
   };
 
+  const basePriceForRender = editCartItem?.basePrice !== undefined ? editCartItem.basePrice : product.price;
   const currentAddonsTotal = selectedAddons.reduce((sum, id) => sum + (addons.find(a => a.id === id)?.price || 0), 0);
-  const finalPrice = product.price + currentAddonsTotal;
+  const finalPrice = basePriceForRender + currentAddonsTotal;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex flex-col justify-end sm:items-center sm:justify-center bg-black/70 backdrop-blur-sm sm:p-6" onClick={onClose}>
@@ -1594,7 +1661,7 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-6 bg-white flex flex-col border-t border-gray-100">
           <h1 className="font-black text-3xl uppercase tracking-tight text-gray-900 leading-none mb-2">{product.name}</h1>
-          <span className="font-black text-2xl text-[#DA291C] mb-4">{formatPriceC(product.price)}</span>
+          <span className="font-black text-2xl text-[#DA291C] mb-4">{formatPriceC(basePriceForRender)}</span>
           <p className="font-bold text-gray-500 text-sm leading-relaxed mb-6">{product.description}</p>
           
           {/* Visual Addons */}
@@ -1634,7 +1701,7 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, onClose: () => void }
             <button onClick={() => setQuantity(quantity + 1)} className="text-xl p-3 hover:text-[#DA291C] transition-colors"><Plus className="w-5 h-5 stroke-[3]"/></button>
           </div>
           <button onClick={handleAdd} className="flex-1 bg-[#DA291C] text-white px-4 sm:px-5 py-4 rounded-[1.25rem] font-black text-sm sm:text-lg flex justify-between items-center shadow-[0_10px_20px_rgba(218,41,28,0.3)] hover:scale-[1.02] active:scale-95 border-b-[5px] border-red-900 active:border-b-0 active:translate-y-[5px] uppercase tracking-wider sm:tracking-widest transition-all">
-            <span>Ajouter</span><span className="bg-white/20 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm shadow-inner">{formatPriceC(finalPrice * quantity)}</span>
+            <span>{editCartItem ? 'Valider' : 'Ajouter'}</span><span className="bg-white/20 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm shadow-inner">{formatPriceC(finalPrice * quantity)}</span>
           </button>
         </div>
       </motion.div>
@@ -1652,11 +1719,41 @@ function PageTracking() {
 
   const activeOrder = liveOrder || localOrder;
 
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+
   useEffect(() => {
      if (liveOrder && localOrder && liveOrder.status !== localOrder.status) {
          setActiveOrder(liveOrder);
      }
   }, [liveOrder, localOrder, setActiveOrder]);
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      if (!activeOrder) return;
+      if (['completed', 'canceled', 'arrived'].includes(activeOrder.status)) {
+        setTimeLeft(null);
+        return;
+      }
+      
+      const startTimeStr = activeOrder.createdAt || activeOrder.timestamp;
+      if (!startTimeStr) return;
+      
+      const startTime = new Date(startTimeStr).getTime();
+      const now = Date.now();
+      const elapsedMins = Math.floor((now - startTime) / 60000);
+      
+      // Default estimate 45m (or 30m if ASAP, etc, but let's say 40m for safety)
+      const estimatedTotalDuration = activeOrder.deliveryTime === 'asap' ? 40 : 45;
+      const remaining = Math.max(0, estimatedTotalDuration - elapsedMins);
+      
+      if (remaining === 0) setTimeLeft("Imminent");
+      else setTimeLeft(`~${remaining} min`);
+    };
+
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 60000);
+    return () => clearInterval(interval);
+  }, [activeOrder]);
 
   const navigate = useNavigate();
 
@@ -1705,12 +1802,15 @@ function PageTracking() {
                   <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Montant payé</span>
                   <span className="text-xl font-black text-gray-900">{formatPriceC(activeOrder.total)}</span>
                </div>
-               {activeOrder.deliveryTime && (
-                 <div className="border-l border-gray-200 pl-4">
-                    <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Heure de passage</span>
-                    <span className="text-xl font-black text-[#25D366] flex items-center gap-1"><Timer className="w-5 h-5"/> {activeOrder.deliveryTime === 'asap' ? '~30m' : activeOrder.deliveryTime}</span>
-                 </div>
-               )}
+               <div className="border-l border-gray-200 pl-4">
+                  <span className="text-xs font-bold text-gray-400 uppercase block mb-1">
+                    {timeLeft ? 'Temps restant est.' : 'Heure estimée'}
+                  </span>
+                  <span className="text-xl font-black text-[#25D366] flex items-center gap-1">
+                    <Timer className="w-5 h-5"/> 
+                    {timeLeft ? timeLeft : (activeOrder.deliveryTime === 'asap' || !activeOrder.deliveryTime ? '~30m' : activeOrder.deliveryTime)}
+                  </span>
+               </div>
                {activeOrder.posName && (
                  <div className="border-l border-gray-200 pl-4">
                     <span className="text-xs font-bold text-gray-400 uppercase block mb-1">Point de vente</span>
