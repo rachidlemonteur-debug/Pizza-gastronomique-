@@ -10,6 +10,8 @@ import POSManager from './POSManager';
 import AdminSettings from './Settings';
 import UsersAdmin from './Users';
 import Reservations from './Reservations';
+import Categories from './Categories';
+import Callbacks from './Callbacks';
 
 // Helpers
 export const hasPermission = (userRole: string | null, required: string) => {
@@ -53,10 +55,12 @@ export default function AdminLayout() {
     { name: 'Dashboard', path: '/admin', icon: <LayoutDashboard className="w-5 h-5"/>, permission: 'dashboard' },
     { name: 'Commandes', path: '/admin/orders', icon: <ShoppingBag className="w-5 h-5"/>, permission: 'orders' },
     { name: 'Points de Vente', path: '/admin/pos', icon: <Store className="w-5 h-5"/>, permission: 'manage_system' },
+    { name: 'Catégories', path: '/admin/categories', icon: <List className="w-5 h-5"/>, permission: 'products' },
     { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, permission: 'products' },
     { name: 'Livreurs', path: '/admin/drivers', icon: <Bike className="w-5 h-5"/>, permission: 'drivers' },
     { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, permission: 'manage_system' },
     { name: 'Réservations', path: '/admin/reservations', icon: <Clock className="w-5 h-5"/>, permission: 'orders' },
+    { name: 'Rappels', path: '/admin/callbacks', icon: <Clock className="w-5 h-5"/>, permission: 'orders' },
     { name: 'Paramètres', path: '/admin/settings', icon: <Settings className="w-5 h-5"/>, permission: 'manage_system' },
   ].filter(item => hasPermission(role, item.permission));
 
@@ -158,12 +162,14 @@ export default function AdminLayout() {
            <Routes>
              <Route path="/" element={<Dashboard />} />
              <Route path="orders" element={<Orders />} />
+             <Route path="categories" element={<Categories />} />
              <Route path="products" element={<Products />} />
              <Route path="drivers" element={<Drivers />} />
              <Route path="pos" element={<POSManager />} />
              <Route path="users" element={<UsersAdmin />} />
              <Route path="settings" element={<AdminSettings />} />
              <Route path="reservations" element={<Reservations />} />
+             <Route path="callbacks" element={<Callbacks />} />
            </Routes>
         </main>
       </div>
