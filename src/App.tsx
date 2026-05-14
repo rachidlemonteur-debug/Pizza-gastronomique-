@@ -381,6 +381,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPOSModalOpen, setIsPOSModalOpen] = useState(false);
   const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false);
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isPlatformRatingOpen, setIsPlatformRatingOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -569,8 +570,15 @@ function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* FLOATING CTA: ETRE RAPPELE */}
-      <div className="fixed bottom-24 sm:bottom-8 right-4 sm:right-8 z-50">
+      {/* FLOATING CTAs */}
+      <div className="fixed bottom-24 sm:bottom-8 right-4 sm:right-8 z-50 flex flex-col gap-3 items-end">
+         <button 
+           onClick={() => setIsReservationModalOpen(true)}
+           className="bg-gray-100 text-[#DA291C] rounded-full p-4 sm:px-6 sm:py-4 flex items-center gap-3 shadow-[0_10px_30px_rgba(0,0,0,0.1)] hover:scale-105 active:scale-95 transition-all outline outline-2 outline-transparent hover:outline-[#DA291C]"
+         >
+            <Clock className="w-6 h-6 sm:w-5 sm:h-5"/>
+            <span className="hidden sm:block font-black uppercase text-sm tracking-widest">Réserver une table</span>
+         </button>
          <button 
            onClick={() => setIsCallbackModalOpen(true)}
            className="bg-gray-900 text-white rounded-full p-4 sm:px-6 sm:py-4 flex items-center gap-3 shadow-[0_10px_30px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all group border-2 border-white"
@@ -583,6 +591,9 @@ function Layout({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {isCallbackModalOpen && (
           <CallbackModal onClose={() => setIsCallbackModalOpen(false)} />
+        )}
+        {isReservationModalOpen && (
+          <ReservationModal onClose={() => setIsReservationModalOpen(false)} selectedPOS={selectedPOS} posList={globalPOS} />
         )}
         {isPlatformRatingOpen && (
           <PlatformRatingModal onClose={() => setIsPlatformRatingOpen(false)} />
@@ -2213,6 +2224,124 @@ function CallbackModal({ onClose }: { onClose: () => void }) {
                
                <button type="submit" disabled={status === 'loading'} className={`w-full text-white py-4 mt-2 rounded-2xl font-black uppercase text-sm tracking-widest shadow-[0_10px_30px_rgba(218,41,28,0.3)] transition-all flex items-center justify-center gap-2 ${status === 'loading' ? 'bg-red-400' : 'bg-[#DA291C] hover:bg-red-800'}`}>
                  {status === 'loading' ? 'Envoi en cours...' : 'Rappelez-moi !'}
+               </button>
+             </form>
+           </>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function ReservationModal({ onClose, selectedPOS, posList }: { onClose: () => void, selectedPOS: any, posList: any[] }) {
+  const [customerName, setCustomerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [guests, setGuests] = useState(2);
+  const [targetPOS, setTargetPOS] = useState(selectedPOS?.id || (posList.length > 0 ? posList[0].id : ''));
+  const [status, setStatus] = useState<'idle'|'loading'|'success'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('loading');
+    
+    try {
+      const { addDoc, collection, getFirestore } = await import('firebase/firestore');
+      const db = getFirestore();
+      
+      const payload = {
+        customerName,
+        phone,
+        date,
+        time,
+        guests: Number(guests),
+        posId: targetPOS,
+        status: 'pending',
+        createdAt: Date.now()
+      };
+      
+      await addDoc(collection(db, 'reservations'), payload);
+      setStatus('success');
+      setTimeout(() => {
+        onClose();
+      }, 3000);
+    } catch (err) {
+      console.error(err);
+      setStatus('idle');
+      alert("Erreur lors de l'envoi de votre réservation. Veuillez réessayer.");
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+    >
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0, y: 20 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md relative shadow-2xl"
+      >
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
+          <X className="w-5 h-5 text-gray-500" />
+        </button>
+
+        {status === 'success' ? (
+           <div className="text-center py-8">
+             <div className="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+               <CheckCircle className="w-10 h-10" />
+             </div>
+             <h3 className="text-2xl font-black text-gray-900 mb-2">Réservation reçue !</h3>
+             <p className="text-gray-500 font-bold mb-6">Nous vous confirmerons votre table très rapidement.</p>
+             <button onClick={onClose} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-black transition-colors">
+               Fermer
+             </button>
+           </div>
+        ) : (
+           <>
+             <div className="w-16 h-16 bg-red-50 text-[#DA291C] rounded-2xl flex items-center justify-center mb-6">
+               <Clock className="w-8 h-8" />
+             </div>
+             <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tight mb-2">Réserver une table</h3>
+             <p className="text-gray-500 font-bold text-sm mb-8">Remplissez ce formulaire pour réserver votre table dans le restaurant de votre choix.</p>
+
+             <form onSubmit={handleSubmit} className="space-y-4">
+               <div>
+                  <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Votre Nom</label>
+                  <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ex: Jean Rakoto" required className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+               </div>
+               <div>
+                  <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Votre Numéro</label>
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="034 00 000 00" required className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Date</label>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required min={new Date().toISOString().split('T')[0]} className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Heure</label>
+                    <input type="time" value={time} onChange={(e) => setTime(e.target.value)} required className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+                 </div>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Personnes</label>
+                    <input type="number" min="1" max="20" value={guests} onChange={(e) => setGuests(Number(e.target.value))} required className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors" />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-black text-gray-400 tracking-widest uppercase mb-1">Restaurant</label>
+                    <select value={targetPOS} onChange={(e) => setTargetPOS(e.target.value)} required className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl focus:border-[#DA291C] focus:ring-0 font-bold text-gray-900 outline-none transition-colors">
+                      {posList.map(pos => (
+                        <option key={pos.id} value={pos.id}>{pos.name}</option>
+                      ))}
+                    </select>
+                 </div>
+               </div>
+               
+               <button type="submit" disabled={status === 'loading'} className={`w-full text-white py-4 mt-2 rounded-2xl font-black uppercase text-sm tracking-widest shadow-[0_10px_30px_rgba(218,41,28,0.3)] transition-all flex items-center justify-center gap-2 ${status === 'loading' ? 'bg-red-400' : 'bg-[#DA291C] hover:bg-red-800'}`}>
+                 {status === 'loading' ? 'Envoi en cours...' : 'Réserver !'}
                </button>
              </form>
            </>

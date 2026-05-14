@@ -8,6 +8,8 @@ import Products from './Products';
 import Drivers from './Drivers';
 import POSManager from './POSManager';
 import AdminSettings from './Settings';
+import UsersAdmin from './Users';
+import Reservations from './Reservations';
 
 // Helpers
 export const hasPermission = (userRole: string | null, required: string) => {
@@ -53,7 +55,8 @@ export default function AdminLayout() {
     { name: 'Points de Vente', path: '/admin/pos', icon: <Store className="w-5 h-5"/>, permission: 'manage_system' },
     { name: 'Produits', path: '/admin/products', icon: <List className="w-5 h-5"/>, permission: 'products' },
     { name: 'Livreurs', path: '/admin/drivers', icon: <Bike className="w-5 h-5"/>, permission: 'drivers' },
-    { name: 'Réservations', path: '/admin/reservations', icon: <Users className="w-5 h-5"/>, permission: 'orders' },
+    { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, permission: 'manage_system' },
+    { name: 'Réservations', path: '/admin/reservations', icon: <Clock className="w-5 h-5"/>, permission: 'orders' },
     { name: 'Paramètres', path: '/admin/settings', icon: <Settings className="w-5 h-5"/>, permission: 'manage_system' },
   ].filter(item => hasPermission(role, item.permission));
 
@@ -158,8 +161,9 @@ export default function AdminLayout() {
              <Route path="products" element={<Products />} />
              <Route path="drivers" element={<Drivers />} />
              <Route path="pos" element={<POSManager />} />
+             <Route path="users" element={<UsersAdmin />} />
              <Route path="settings" element={<AdminSettings />} />
-             <Route path="reservations" element={<div className="p-8 text-center text-gray-500 font-bold">Module de réservations en cours de développement.</div>} />
+             <Route path="reservations" element={<Reservations />} />
            </Routes>
         </main>
       </div>
