@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useFirestore } from '../hooks/useFirestore';
 import { auth, db } from '../firebase';
-import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut, getIdTokenResult } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export type AdminRole = 'super_admin' | 'admin' | 'manager' | 'staff' | 'driver' | 'editor' | 'viewer';
@@ -28,21 +28,15 @@ export const AdminContextProvider = ({ children }: { children: React.ReactNode }
   const { data: posList } = useFirestore('points_of_sale', 'name');
 
   useEffect(() => {
-    const isEmergencyAdmin = localStorage.getItem('gastro_emergency_token') === 'GASTRO_MAD_2024';
-    if (isEmergencyAdmin) {
-      setUser({ email: 'admin@madagascar.mg', uid: 'emergency_admin' } as any);
-      setRole('super_admin');
-      setLoadingAuth(false);
-      return;
-    }
-
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const userRef = doc(db, 'users', u.uid);
         try {
+          const userRef = doc(db, 'users', u.uid);
           const snap = await getDoc(userRef);
-          if (u.email === 'beidoufadimatou1998@gmail.com') {
+          const idTokenResult = await getIdTokenResult(u, true);
+          
+          if (u.email === 'beidoufadimatou1998@gmail.com' || idTokenResult.claims.admin === true) {
             if (!snap.exists() || snap.data().role !== 'super_admin') {
                await setDoc(userRef, { email: u.email, role: 'super_admin' }, { merge: true });
             }
@@ -70,7 +64,6 @@ export const AdminContextProvider = ({ children }: { children: React.ReactNode }
   }, []);
 
   const logout = async () => {
-    localStorage.removeItem('gastro_emergency_token');
     await signOut(auth);
     window.location.reload();
   };

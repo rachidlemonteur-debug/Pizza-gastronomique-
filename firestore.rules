@@ -106,23 +106,22 @@ service cloud.firestore {
              (!data.keys().hasAny(['clientHasRated']) || (data.clientHasRated is bool));
     }
     match /orders/{orderId} {
-      allow get: if isValidId(orderId) && (isViewer() || true); 
-      allow list: if isViewer() || true;
+      allow get: if isValidId(orderId) && isSignedIn() && (isViewer() || existing().userId == request.auth.uid); 
+      allow list: if isSignedIn() && (isViewer() || existing().userId == request.auth.uid);
       
-      allow create: if isValidOrder(incoming()) && incoming().keys().hasAll(['total', 'status']); // Relaxed 'customerName' as it might be anonymous
+      allow create: if isSignedIn() && isValidOrder(incoming()) && incoming().keys().hasAll(['total', 'status']) && incoming().userId == request.auth.uid;
       
-      // Editor can update, mostly status
-      allow update: if isAdmin() || (isValidOrder(incoming()) && (
+      allow update: if isSignedIn() && (isAdmin() || (isValidOrder(incoming()) && (
         (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation', 'driver'])) ||
         // Client rating the order
-        (existing().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['clientHasRated'])) ||
+        (existing().status == 'completed' && existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['clientHasRated'])) ||
         // Livreur taking charge from 'assigned' (driver was already set by manager)
-        (incoming().status == 'delivering' && existing().status == 'assigned' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        (existing().keys().hasAll(['driver']) && existing().driver.id == request.auth.uid && incoming().status == 'delivering' && existing().status == 'assigned' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
         // Livreur updating location
-        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasAll(['driverLocation']) && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'status'])) ||
+        (existing().keys().hasAll(['driver']) && existing().driver.id == request.auth.uid && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasAll(['driverLocation']) && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'status'])) ||
         // Livreur marking as arrived
-        (existing().keys().hasAll(['driver']) && incoming().driver.id == existing().driver.id && incoming().status == 'arrived' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
-      ));
+        (existing().keys().hasAll(['driver']) && existing().driver.id == request.auth.uid && incoming().driver.id == existing().driver.id && incoming().status == 'arrived' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      )));
       
       allow delete: if isAdmin();
     }

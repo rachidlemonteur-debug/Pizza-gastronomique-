@@ -76,6 +76,7 @@ export function PageCheckout() {
            address: address || '',
            paymentMethod,
            customerName,
+           phone: phoneNumber,
            paymentPhone: phoneNumber,
            deliveryTime,
            posId: selectedPOS?.id?.toString() || 'unknown',

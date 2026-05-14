@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -12,11 +12,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Admin with default credentials (ADC) if possible
-try {
-  admin.initializeApp();
-  console.log("Firebase Admin Initialized automatically via ADC");
-} catch (e) {
-  console.error("Failed to initialize Firebase Admin automatically. Provide service account key if running locally.", e);
+if (!admin.apps?.length) {
+  try {
+    admin.initializeApp();
+    console.log("Firebase Admin Initialized automatically via ADC");
+  } catch (e) {
+    console.error("Failed to initialize Firebase Admin automatically. Provide service account key if running locally.", e);
+  }
 }
 
 async function startServer() {
@@ -28,7 +30,10 @@ async function startServer() {
     contentSecurityPolicy: false, // Disabled for Vite development mode compatibility
     crossOriginEmbedderPolicy: false,
   }));
-  app.use(cors());
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || '*', // Use your frontend URL here in production
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  }));
 
   // Body Parsing
   app.use(express.json({ limit: '1mb' })); // Limit body size to prevent payload too large attacks
@@ -63,7 +68,7 @@ async function startServer() {
       }
       
       const userDoc = await admin.firestore().collection('users').doc(decodedToken.uid).get();
-      if (userDoc.exists && userDoc.data()?.role === 'super_admin') {
+      if (userDoc.exists && userDoc.data()?.role === 'super_admin' || decodedToken.admin === true) {
          (req as any).user = decodedToken;
          return next();
       }
@@ -91,9 +96,10 @@ async function startServer() {
       const db = admin.firestore();
       const collections = await db.listCollections();
       const backup: any = {};
+      const limit = parseInt(req.query.limit as string) || 500;
       
       for (const col of collections) {
-         const snap = await col.get();
+         const snap = await col.limit(limit).get();
          backup[col.id] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }
       

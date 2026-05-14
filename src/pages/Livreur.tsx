@@ -71,7 +71,7 @@ export function PageLivreur() {
   const assignedOrders = allOrders?.filter((o:any) => o.status === 'assigned' && o.driver?.id === driverIdentity?.id)?.sort((a:any, b:any) => a.timestamp - b.timestamp);
   const offeredOrder = (onlineStatus === 'available' && !activeDelivery && assignedOrders && assignedOrders?.length > 0) ? assignedOrders[0] : null;
 
-  const historyOrders = allOrders?.filter((o:any) => ['completed', 'canceled'].includes(o.status) && o.driver?.id === driverIdentity?.id)?.sort((a:any, b:any) => b.timestamp - a.timestamp);
+  const historyOrders = allOrders?.filter((o:any) => ['completed', 'cancelled'].includes(o.status) && o.driver?.id === driverIdentity?.id)?.sort((a:any, b:any) => b.timestamp - a.timestamp);
 
   const updateOrderStatus = async (docId: string, newStatus: string, additionalProps = {}) => {
     try {
@@ -209,7 +209,7 @@ export function PageLivreur() {
                  <p className="text-gray-500 font-bold flex items-center gap-2 text-lg mb-6"><MapPin className="w-5 h-5 text-[#DA291C] shrink-0" /> {activeDelivery.address}</p>
                  
                  <div className="flex gap-3 mb-6">
-                   <a href={`tel:${activeDelivery.paymentPhone}`} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 py-4 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
+                   <a href={`tel:${activeDelivery.phone || activeDelivery.paymentPhone}`} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 py-4 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
                      <Phone className="w-5 h-5" /> Appeler
                    </a>
                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(activeDelivery.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 py-4 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">

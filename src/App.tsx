@@ -9,7 +9,6 @@ import {
   Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert, PhoneCall
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 // Fix for default marker icons in React Leaflet
@@ -1730,7 +1729,7 @@ function PageTracking() {
   useEffect(() => {
     const calculateTimeLeft = () => {
       if (!activeOrder) return;
-      if (['completed', 'canceled', 'arrived'].includes(activeOrder.status)) {
+      if (['completed', 'cancelled', 'arrived'].includes(activeOrder.status)) {
         setTimeLeft(null);
         return;
       }
@@ -1836,10 +1835,10 @@ function PageTracking() {
                   { id: 'delivering', label: 'En livraison', customerLabel: 'Le livreur est en route vers chez vous ! 🛵', color: 'bg-blue-100 text-blue-700', isTerminal: false },
                   { id: 'arrived', label: 'Arrivé', customerLabel: 'Le livreur est devant chez vous !', color: 'bg-purple-100 text-purple-700', isTerminal: false },
                   { id: 'completed', label: 'Terminée', customerLabel: 'Commande terminée !', color: 'bg-green-100 text-green-700', isTerminal: true },
-                  { id: 'canceled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCanceled: true }
+                  { id: 'cancelled', label: 'Annulée', customerLabel: 'Commande annulée.', color: 'bg-gray-100 text-gray-500', isTerminal: true, isCancelled: true }
                 ];
 
-                const validStatuses = statuses.filter((s:any) => !s.isCanceled);
+                const validStatuses = statuses.filter((s:any) => !s.isCancelled);
                 const currentValidIdx = validStatuses.findIndex((s:any) => s.id === activeOrder.status);
                 const progressPct = currentValidIdx >= 0 ? Math.max(10, ((currentValidIdx + 1) / validStatuses.length) * 100) : 0;
                 
@@ -1854,12 +1853,12 @@ function PageTracking() {
                      </div>
                      <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
                         <div 
-                          className={`h-full rounded-full transition-all duration-1000 ${currentStatusObj?.isCanceled ? 'bg-gray-400' : 'bg-gradient-to-r from-[#DA291C] to-[#FFC72C]'}`}
-                          style={{ width: currentStatusObj?.isCanceled ? '100%' : `${progressPct}%` }} 
+                          className={`h-full rounded-full transition-all duration-1000 ${currentStatusObj?.isCancelled ? 'bg-gray-400' : 'bg-gradient-to-r from-[#DA291C] to-[#FFC72C]'}`}
+                          style={{ width: currentStatusObj?.isCancelled ? '100%' : `${progressPct}%` }} 
                         />
                      </div>
                      <div className="mt-4 text-center bg-gray-50 py-3 rounded-xl border border-gray-100">
-                       <p className={`font-black text-sm uppercase tracking-wider ${currentStatusObj?.isCanceled ? 'text-gray-500' : 'text-[#DA291C]'}`}>
+                       <p className={`font-black text-sm uppercase tracking-wider ${currentStatusObj?.isCancelled ? 'text-gray-500' : 'text-[#DA291C]'}`}>
                          {currentStatusObj?.customerLabel || 'Statut inconnu'}
                        </p>
                      </div>
