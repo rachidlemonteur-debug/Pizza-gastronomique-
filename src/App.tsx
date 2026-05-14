@@ -584,6 +584,9 @@ function Layout({ children }: { children: React.ReactNode }) {
         {isCallbackModalOpen && (
           <CallbackModal onClose={() => setIsCallbackModalOpen(false)} />
         )}
+        {isPlatformRatingOpen && (
+          <PlatformRatingModal onClose={() => setIsPlatformRatingOpen(false)} />
+        )}
       </AnimatePresence>
 
       {/* RETAIL FOOTER */}
