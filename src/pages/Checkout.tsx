@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ArrowLeft, CheckCircle2, Phone, CreditCard, Banknote, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Phone, CreditCard, Banknote, Clock, MapPin, Loader2 } from 'lucide-react';
 import { useCart } from '../App';
 import { useFirestore } from '../hooks/useFirestore';
 import { auth, db } from '../firebase';
@@ -19,8 +19,45 @@ export function PageCheckout() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [hasRequestedLocation, setHasRequestedLocation] = useState(false);
   
   const { add: addOrder } = useFirestore('orders');
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      return;
+    }
+
+    setIsLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+        const data = await res.json();
+        if (data && data.display_name) {
+          setAddress(data.display_name);
+        } else {
+          setAddress(`${latitude}, ${longitude}`);
+        }
+      } catch (e) {
+        setAddress(`${latitude}, ${longitude}`);
+      } finally {
+        setIsLoadingLocation(false);
+      }
+    }, () => {
+      // Don't alert aggressively on auto-fetch, just stop loading
+      setIsLoadingLocation(false);
+    });
+  };
+
+  React.useEffect(() => {
+    if (orderMode === 'livraison' && !address && !hasRequestedLocation) {
+        setHasRequestedLocation(true);
+        handleGetLocation();
+    }
+  }, [orderMode, address, hasRequestedLocation]);
 
   const totalDeliveryFee = orderMode === 'livraison' ? (globalConfig?.deliveryFee || 0) : 0;
   const total = getCartTotal() + totalDeliveryFee;
@@ -163,7 +200,18 @@ export function PageCheckout() {
                 
                 {orderMode === 'livraison' && (
                   <div className="mt-4">
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">Adresse de livraison</label>
+                    <div className="flex items-center justify-between mb-2">
+                       <label className="block text-xs font-black text-gray-500 uppercase tracking-widest">Adresse de livraison</label>
+                       <button
+                         type="button"
+                         onClick={handleGetLocation}
+                         disabled={isLoadingLocation}
+                         className="flex items-center gap-1 text-xs font-bold text-[#DA291C] hover:text-red-700 transition-colors disabled:opacity-50"
+                       >
+                         {isLoadingLocation ? <Loader2 className="w-3 h-3 animate-spin"/> : <MapPin className="w-3 h-3"/>}
+                         {isLoadingLocation ? 'Localisation...' : 'Ma position'}
+                       </button>
+                    </div>
                     <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Votre adresse complète..." className="w-full bg-gray-50 border-0 p-3 rounded-xl focus:ring-2 focus:ring-[#DA291C] font-bold" />
                   </div>
                 )}

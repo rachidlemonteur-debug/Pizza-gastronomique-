@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAdmin } from './AdminContext';
-import { LayoutDashboard, ShoppingBag, List, Users, Bike, Settings, Store, Menu, LogOut, Eye, Filter, Clock } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, List, Users, Bike, Settings, Store, Menu, LogOut, Eye, Filter, Clock, Star, Tag, FileText } from 'lucide-react';
 import Dashboard from './Dashboard';
 import Orders from './Orders';
 import Products from './Products';
@@ -12,6 +12,9 @@ import UsersAdmin from './Users';
 import Reservations from './Reservations';
 import Categories from './Categories';
 import Callbacks from './Callbacks';
+import Promos from './Promos';
+import Reviews from './Reviews';
+import Pages from './Pages';
 
 // Helpers
 export const hasPermission = (userRole: string | null, required: string) => {
@@ -61,6 +64,9 @@ export default function AdminLayout() {
     { name: 'Utilisateurs', path: '/admin/users', icon: <Users className="w-5 h-5"/>, permission: 'manage_system' },
     { name: 'Réservations', path: '/admin/reservations', icon: <Clock className="w-5 h-5"/>, permission: 'orders' },
     { name: 'Rappels', path: '/admin/callbacks', icon: <Clock className="w-5 h-5"/>, permission: 'orders' },
+    { name: 'Promotions', path: '/admin/promos', icon: <Tag className="w-5 h-5"/>, permission: 'products' },
+    { name: 'Avis Clients', path: '/admin/reviews', icon: <Star className="w-5 h-5"/>, permission: 'orders' },
+    { name: 'Pages', path: '/admin/pages', icon: <FileText className="w-5 h-5"/>, permission: 'manage_system' },
     { name: 'Paramètres', path: '/admin/settings', icon: <Settings className="w-5 h-5"/>, permission: 'manage_system' },
   ].filter(item => hasPermission(role, item.permission));
 
@@ -170,6 +176,9 @@ export default function AdminLayout() {
              <Route path="settings" element={<AdminSettings />} />
              <Route path="reservations" element={<Reservations />} />
              <Route path="callbacks" element={<Callbacks />} />
+             <Route path="promos" element={<Promos />} />
+             <Route path="reviews" element={<Reviews />} />
+             <Route path="pages" element={<Pages />} />
            </Routes>
         </main>
       </div>

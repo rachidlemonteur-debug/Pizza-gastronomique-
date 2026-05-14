@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingBag, MapPin, Plus, Minus, MessageCircle, Phone, 
   Menu as MenuIcon, X, ArrowRight, ArrowLeft, UtensilsCrossed, Timer, 
-  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert, PhoneCall
+  Gift, Star, Smartphone, ChevronRight, Car, Package, Heart, Trash2, Lock, Search, QrCode, LogOut, Home, Navigation, Bike, CheckCircle, AlertTriangle, RefreshCcw, ShieldAlert, PhoneCall, Clock
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -1629,7 +1629,7 @@ const ProductDetailModal: React.FC<{ product: ProductInfo, editCartItem?: CartIt
     return inst;
   });
   const [selectedAddons, setSelectedAddons] = useState<string[]>(editCartItem?.selectedAddons || []);
-  useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = 'unset'; }; }, []);
+  useEffect(() => { document.body.style.overflowY = 'hidden'; return () => { document.body.style.overflowY = 'auto'; }; }, []);
 
   const addons = [
     { id: '1', name: 'Extra Fromage', price: 1500 },
@@ -2176,11 +2176,13 @@ function CallbackModal({ onClose }: { onClose: () => void }) {
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+      onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 20 }} 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md relative shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
           <X className="w-5 h-5 text-gray-500" />
@@ -2277,11 +2279,13 @@ function ReservationModal({ onClose, selectedPOS, posList }: { onClose: () => vo
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+      onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 20 }} 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md relative shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors">
           <X className="w-5 h-5 text-gray-500" />
@@ -2386,11 +2390,13 @@ function PlatformRatingModal({ onClose }: { onClose: () => void }) {
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4"
+      onClick={onClose}
     >
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 20 }} 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         className="bg-white rounded-[2rem] p-6 sm:p-10 w-full max-w-md shadow-2xl relative"
+        onClick={(e) => e.stopPropagation()}
       >
          <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><X className="w-5 h-5 text-gray-500"/></button>
          

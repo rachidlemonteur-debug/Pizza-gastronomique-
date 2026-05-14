@@ -147,7 +147,7 @@ export default function Categories() {
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Ordre d'affichage</label>
-                <input required type="number" value={formData.order} onChange={e => setFormData({...formData, order: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 font-medium focus:border-[#DA291C] focus:ring-1 focus:ring-[#DA291C] outline-none transition-all"/>
+                <input required type="number" value={formData.order} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full border border-gray-200 rounded-xl px-4 py-3 font-medium focus:border-[#DA291C] focus:ring-1 focus:ring-[#DA291C] outline-none transition-all"/>
               </div>
 
               <div className="pt-4 flex gap-3">

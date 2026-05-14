@@ -68,7 +68,7 @@ export const AdminContextProvider = ({ children }: { children: React.ReactNode }
     window.location.reload();
   };
 
-  const activePOS = selectedPosId === 'ALL' ? null : posList.find(p => p.id === selectedPosId);
+  const activePOS = selectedPosId === 'ALL' ? null : posList.find((p: any) => p.id === selectedPosId);
 
   return (
     <AdminContext.Provider value={{
